@@ -1,2 +1,6 @@
 *.exe
+*.in
+*.out
+*.ans
 test/
+.vscode/
