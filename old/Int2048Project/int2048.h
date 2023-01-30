@@ -262,4 +262,3 @@ const size_t SIZEOFINT2048 = sizeof(NTT_base);
 
 }
 #endif
-
