@@ -11,6 +11,9 @@ namespace dark {
 
 struct int2048_base {
   protected:
+    /* Common buffer for in and out. */
+    inline static std::string buffer {};
+
     using _Word_Type = std::uintmax_t;
     using _Container = std::vector <_Word_Type>;
 
@@ -52,27 +55,92 @@ struct uint2048_view;
 
 struct uint2048_view : int2048_base {
   protected:
+    friend class int2048_view;
+    friend class int2048;
+    friend class uint2048;
+
     using _Base_Type = int2048_base;
     using _Base_Type::_Word_Type;
     using _Base_Type::_Container;
-    using _Iterator  = typename _Container::iterator;
-    using _CIterator = typename _Container::const_iterator; 
+    using _Iterator = typename _Container::const_iterator;
 
-    _CIterator beg;
-    _CIterator end;
-  
+    _Iterator _beg;
+    _Iterator _end;
+
+    uint2048_view(_Iterator __beg, _Iterator __end)
+    noexcept : _beg(__beg), _end(__end) {}
 
   public:
+    uint2048_view() = default;
+
+    explicit uint2048_view(const int2048 &) noexcept;
+    explicit uint2048_view(const int2048 &&) = delete;
+    uint2048_view(const uint2048 &) noexcept;
+    uint2048_view(const uint2048 &&) = delete;
+
+    explicit uint2048_view(int2048_view) noexcept;
+    explicit operator int2048_view() const noexcept;
+    explicit operator std::string() const { return this->to_string(); }
 
 
+  public:
     std::string to_string() const;
+    void to_string(std::string &) const;
 
-
-
-
-
+    _Iterator begin() const noexcept { return _beg; }
+    _Iterator end()   const noexcept { return _end; }
 };
 
+
+struct int2048_view : int2048_base {
+  protected:
+    friend class uint2048_view;
+    friend class int2048;
+    friend class uint2048;
+
+    using _Base_Type = int2048_base;
+    using _Base_Type::_Word_Type;
+    using _Base_Type::_Container;
+    using _Iterator = typename _Container::const_iterator;
+
+    _Iterator _beg;
+    _Iterator _end;
+    bool sign;
+
+    int2048_view(_Iterator __beg, _Iterator __end, bool __sign = false)
+    noexcept : _beg(__beg), _end(__end), sign(__sign) {}
+
+  public:
+    int2048_view() = default;
+
+    int2048_view(const int2048 &) noexcept;
+    int2048_view(const int2048 &&) = delete;
+    explicit int2048_view(const uint2048 &) noexcept;
+    explicit int2048_view(const uint2048 &&) = delete;
+
+    explicit int2048_view(uint2048_view,bool) noexcept;
+    explicit int2048_view(uint2048_view) noexcept;
+
+    explicit operator uint2048_view() const noexcept;
+    explicit operator std::string() const { return this->to_string(); }
+
+  public:
+    _Iterator begin() const noexcept { return _beg; }
+    _Iterator end()   const noexcept { return _end; }
+
+    int2048_view operator + (void) const noexcept;
+    int2048_view operator - (void) const noexcept;
+
+    std::string to_string() const;
+    void to_string(std::string &) const;
+
+    int2048_view set_sign(bool) noexcept;
+    int2048_view reverse() noexcept;
+
+    friend int2048 operator + (int2048_view, int2048_view);
+    friend int2048 operator - (int2048_view, int2048_view);
+    friend int2048 operator * (int2048_view, int2048_view);
+};
 
 
 struct int2048 : int2048_base {
@@ -80,33 +148,6 @@ struct int2048 : int2048_base {
     static_assert(cexp_pow(10, Base_Length) == Base, "Wrongly implemented!");
 
   protected:
-    /* Init the array with a given size. */
-    int2048(size_t __n,std::nullptr_t) { data.reserve(__n); }
-
-    /* Resize/reserve factor for a better buffering performance. */
-    static std::size_t factor(std::size_t __n) noexcept {
-        return __n + ((__n >> 1) | 1);
-    }
-
-    static std::size_t get_add_length
-        (const _Container &__lhs, const _Container &__rhs) noexcept {
-        return std::max(__lhs.size(), __rhs.size()) + 1;
-    }
-
-    static std::pair <std::size_t,bool> get_sub_length
-        (const _Container &__lhs, const _Container &__rhs) noexcept {
-        if (__lhs.size() != __rhs.size()) 
-            return {
-                std::max(__lhs.size(), __rhs.size()),
-                __lhs.size() < __rhs.size()
-            };
-
-        for (auto __l = __lhs.rbegin(), __r = __rhs.rbegin(), 
-                  __end = __lhs.rend() ; __l != __end ; (void)++__l, ++__r) {
-            if (*__l != *__r) return { __end - __l , *__l < *__r };
-        } return {0,0};
-    }
-
     using _Base_Type = int2048_base;
     using _Base_Type::_Word_Type;
     using _Base_Type::_Container;
@@ -125,76 +166,98 @@ struct int2048 : int2048_base {
     _Container  data; /* Data of the integer.   */
     bool        sign; /* Sign of the integer.   */
 
-    /* Common buffer for in and out. */
-    inline static std::string buffer {};
-
-    /* Unfold template of init from an __val. */
-    template <std::size_t _Beg>
-    void init_fold(std::uintmax_t __val) {
-        static_assert (_Beg <= Word_Length, "Too large!");
-        if constexpr (_Beg == Word_Length) {
-            for (std::size_t __i = 0; __i < _Beg; ++__i) {
-                data.push_back(__val % this->Base);
-                __val /= Base;
-            }
-        } else {
-            if (__val < cexp_pow(Base, _Beg)) {
-                /* Compiler should unroll this loop. */
-                for (std::size_t __i = 0; __i < _Beg; ++__i) {
-                    data.push_back(__val % this->Base);
-                    __val /= Base;
-                }
-            } else return init_fold <_Beg + 1> (__val);
-        }
-    }
-
-    /* Unfold template of parsing string to int. */
-    template <std::size_t _Beg>
-    _Word_Type parse_fold(const char *data) const {
-        if constexpr (_Beg == Base_Length) { return 0; }
-        else {
-            return parse_fold <_Beg + 1> (data) +
-                parse_char(data[-_Beg - 1]) * cexp_pow(10, _Beg);
-        }
-    }
-
-    /* Unfold template of narrowing to a builtin-type. */
-    template <std::size_t _Beg>
-    _Word_Type narrow_fold() const noexcept {
-        if constexpr (_Beg == Word_Length) return 0;
-        else {
-            if (data.size() == _Beg) return 0;
-            return data[_Beg] *cexp_pow(Base, _Beg) + narrow_fold <_Beg + 1> ();
-        }
-    }
+    /* Init the array with a given size. */
+    int2048(size_t __n,std::nullptr_t) { data.reserve(__n); }
 
     void safe_print(std::string &) const;
 
-    int2048 &try_append(_Word_Type __val)
-    { if (__val) data.push_back(__val); return *this; }
-
-    int2048 &try_popout(_Word_Type __val)
-    { if (__val) data.resize(data.size() - __val); return *this;  }
-
-    [[nodiscard]] static bool increment(_Iterator,_CIterator,_CIterator) noexcept;
-    [[nodiscard]] static bool decrement(_Iterator,_CIterator,_CIterator) noexcept;
-
-
-    void arith_add(const _Container &, const _Container &);
-    void arith_sub(const _Container &, const _Container &);
-
-    void arith_mul(const _Container &, const _Container &);
-    void arith_div(const _Container &, const _Container &);
-
   public:
+    /* Constructors and assignements. */
 
     int2048() noexcept(noexcept(_Container())) : data{}, sign{false} {}
     ~int2048() = default;
+
 
     int2048(int2048 &&) = default;
     int2048(const int2048 &) = default;
     int2048 &operator = (const int2048 &)   = default;
     int2048 &operator = (int2048 &&)        = default;
+
+    explicit int2048(int2048_view);
+    int2048 &operator = (int2048_view);
+
+    /* Construct from an string. */
+    explicit int2048(std::string_view);
+    int2048 &operator = (std::string_view);
+
+  public:
+    /* Return true iff this integer is zero. */
+    bool operator !(void) const noexcept;
+
+    int2048_view operator + (void)& noexcept;
+    int2048_view operator - (void)& noexcept;
+
+    int2048 operator + (void)&& noexcept;
+    int2048 operator - (void)&& noexcept;
+
+    int2048 operator ++ (int)&;
+    int2048 operator -- (int)&;
+
+    int2048 &operator ++ (void)&;
+    int2048 &operator -- (void)&;
+    int2048 &operator ++ (void)&&;
+    int2048 &operator -- (void)&&;
+
+    friend int2048 &operator += (int2048 &, int2048_view);
+    friend int2048 &operator += (int2048 &, int2048 &&);
+
+    friend int2048 operator + (int2048_view, int2048 &&);
+    friend int2048 operator + (int2048 &&, int2048_view);
+    friend int2048 operator + (int2048 &&, int2048 &&);
+
+    friend int2048 &operator -= (int2048 &, int2048_view);
+    friend int2048 &operator -= (int2048 &, int2048 &&);
+
+    friend int2048 operator - (int2048_view, int2048 &&);
+    friend int2048 operator - (int2048 &&, int2048_view);
+    friend int2048 operator - (int2048 &&, int2048 &&);
+
+    friend int2048 &operator *= (int2048 &, int2048_view);
+    friend int2048 &operator *= (int2048 &, int2048 &&);
+
+    friend int2048 operator * (int2048_view, int2048 &&);
+    friend int2048 operator * (int2048 &&, int2048_view);
+    friend int2048 operator * (int2048 &&, int2048 &&);
+
+    int2048 &operator /= (const int2048 &);
+    friend int2048 operator / (int2048, const int2048 &);
+
+    int2048 &operator %= (const int2048 &);
+    friend int2048 operator % (int2048, const int2048 &);
+
+    friend std::istream &operator >> (std::istream &, int2048 &);
+    friend std::ostream &operator << (std::ostream &, const int2048 &);
+
+    friend bool operator == (const int2048 &, const int2048 &) noexcept;
+    friend std::strong_ordering operator <=> (const int2048 &, const int2048 &) noexcept;
+
+  public:
+
+    void swap (int2048 &__other) noexcept;
+
+    int2048 &abs_increment();
+    int2048 &abs_decrement() noexcept;
+
+    void parse(std::string_view);
+    std::string to_string() const;
+    void to_string(std::string &) const;
+
+    int2048 &set_sign(bool) & noexcept;
+    int2048 set_sign(bool) && noexcept;
+    int2048 &reverse() & noexcept;
+    int2048 reverse() && noexcept;
+
+  public:
 
     /* Construct from a single word.  */
     template <typename _Tp>
@@ -216,7 +279,7 @@ struct int2048 : int2048_base {
 
     /* Assign from a single word. */
     template <typename _Tp>
-    requires std::same_as <_Tp, std::uintmax_t>
+    requires std::same_as <_Tp, _Word_Type>
     int2048 &operator = (_Tp __val) {
         this->reset();
         if (__val != 0) init_fold <1> (__val);
@@ -231,60 +294,8 @@ struct int2048 : int2048_base {
         return *this;
     }
 
-    /* Construct from an string. */
-    explicit int2048(std::string_view __src) { this->parse(__src); }
 
-    auto begin() noexcept { return data.begin(); }
-    auto end()   noexcept { return data.end();   }
-    auto begin() const noexcept { return data.begin(); }
-    auto end()   const noexcept { return data.end();   }
-
-  public:
-    /* Return true iff this integer is zero. */
-    bool operator !(void) const noexcept { return this->is_zero(); }
-
-    friend int2048 operator - (const int2048 &__src)
-    noexcept { auto __tmp = __src; __tmp.reverse(); return __tmp; }
-    friend int2048 operator - (int2048 &&__src)
-    noexcept { return std::move(__src.reverse()); }
-
-    friend const int2048 &operator + (const int2048 &__src) noexcept { return __src; }
-    friend int2048 operator + (int2048 &&__src) noexcept  { return std::move(__src); }
-
-    int2048 operator ++ (int);
-    int2048 operator -- (int);
-
-    int2048 &operator ++ (void);
-    int2048 &operator -- (void);
-
-    friend int2048 &operator += (int2048 &, const int2048 &);
-    // friend int2048 &operator += (int2048 &, int2048 &&);
-    friend int2048 operator + (const int2048 &, const int2048 &);
-    // friend int2048 operator + (int2048 &&, int2048 &&);
-
-    friend int2048 &operator -= (int2048 &, const int2048 &);
-    // friend int2048 &operator -= (int2048 &, int2048 &&);
-    friend int2048 operator - (const int2048 &, const int2048 &);
-    // friend int2048 operator - (int2048 &&, int2048 &&);
-
-    int2048 &operator *= (const int2048 &);
-    friend int2048 operator * (int2048, const int2048 &);
-
-    int2048 &operator /= (const int2048 &);
-    friend int2048 operator / (int2048, const int2048 &);
-
-    int2048 &operator %= (const int2048 &);
-    friend int2048 operator % (int2048, const int2048 &);
-
-    friend std::istream &operator >> (std::istream &, int2048 &);
-    friend std::ostream &operator << (std::ostream &, const int2048 &);
-
-    friend bool operator == (const int2048 &, const int2048 &) noexcept;
-    friend std::strong_ordering operator <=> (const int2048 &, const int2048 &) noexcept;
-
-    explicit operator bool() const noexcept { return this->is_non_zero(); }
-
-    explicit operator std::string() const { return this->to_string(); }
+    /* Implementations in .h file. */
 
     template <typename _Tp>
     requires std::is_signed_v <_Tp>
@@ -297,55 +308,12 @@ struct int2048 : int2048_base {
     requires std::is_unsigned_v <_Tp>
     explicit operator _Tp() const noexcept { return narrow_fold <0> (); }
 
-  public:
+    explicit operator bool() const noexcept { return this->is_non_zero(); }
 
-    void swap (int2048 &__other) noexcept {
-        this->data.swap(__other.data);
-        std::swap(this->sign, __other.sign);
-    }
+    explicit operator std::string() const { return this->to_string(); }
 
-    /* Increase the absolute value by 1 and return reference to self. */
-    int2048 &abs_increment() {
-        return try_append (
-            increment(this->begin(),this->begin(),this->end())
-        );
-    }
-    /* Decrease the absolute value by 1 and return reference to self. */
-    int2048 &abs_decrement() noexcept { /* Decrement won't allocate space, thus noexcept. */
-        return try_popout (
-            decrement(this->begin(),this->begin(),this->end())
-        );
-    }
-
-    void parse(std::string_view);
-    std::string to_string() const;
-    /**
-     * @brief Append the integer to the string.
-     * @param __str The string to be appended.
-     */
-    void print(std::string &__str) const {
-        this->is_zero() ? __str.push_back('0') : this->safe_print(__str);
-    }
-
-    /**
-     * @brief Set the sign of the integer.
-     * @return Reference to this integer.
-     */
-    int2048 &set_sign(bool __sign) & noexcept { sign = __sign & bool(*this); return *this; }
-
-    /**
-     * @brief Set the sign of the integer.
-     * @return Reference to this integer.
-     */
-    int2048 set_sign(bool __sign) && noexcept { return std::move(this->set_sign(__sign)) ; }
-
-    /**
-     * @brief Reverse the sign of the integer.
-     * @return Reference to this integer.
-     */
-    int2048 &reverse() & noexcept { sign ^= bool(*this); return *this; }
-
-    int2048 reverse() && noexcept { return std::move(this->reverse()); }
+    /* Reset this integer to 0. */
+    void reset() noexcept { sign = 0; data.clear(); }
 
     bool is_zero()          const noexcept { return data.empty(); }
     [[nodiscard]]
@@ -360,8 +328,46 @@ struct int2048 : int2048_base {
     [[nodiscard]]
     bool is_non_positive()  const noexcept { return  is_negative() ||  this->is_zero(); }
 
-    /* Reset this integer to 0. */
-    void reset() noexcept { sign = 0; data.clear(); }
+    /* Init from an _Word_Type. */
+    template <std::size_t _Beg>
+    void init_fold(_Word_Type __val) {
+        static_assert (_Beg <= Word_Length, "Too large!");
+        if constexpr (_Beg == Word_Length) {
+            for (std::size_t __i = 0; __i < _Beg; ++__i) {
+                data.push_back(__val % this->Base);
+                __val /= Base;
+            }
+        } else {
+            if (__val < cexp_pow(Base, _Beg)) {
+                /* Compiler should unroll this loop. */
+                for (std::size_t __i = 0; __i < _Beg; ++__i) {
+                    data.push_back(__val % this->Base);
+                    __val /= Base;
+                }
+            } else return init_fold <_Beg + 1> (__val);
+        }
+    }
+
+    /* Parsing string to int. */
+    template <std::size_t _Beg>
+    _Word_Type parse_fold(const char *data) const {
+        if constexpr (_Beg == Base_Length) { return 0; }
+        else {
+            return parse_fold <_Beg + 1> (data) +
+                parse_char(data[-_Beg - 1]) * cexp_pow(10, _Beg);
+        }
+    }
+
+    /* Narrowing down to a builtin-type. */
+    template <std::size_t _Beg>
+    _Word_Type narrow_fold() const noexcept {
+        if constexpr (_Beg == Word_Length) return 0;
+        else {
+            if (data.size() == _Beg) return 0;
+            return data[_Beg] *cexp_pow(Base, _Beg) + narrow_fold <_Beg + 1> ();
+        }
+    }
+
 };
 
 

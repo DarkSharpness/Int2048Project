@@ -1,0 +1,4 @@
+#pragma once
+
+#include "int2048_impl.h"
+#include "int2048_view.h"
