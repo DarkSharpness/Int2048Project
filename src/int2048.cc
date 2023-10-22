@@ -101,21 +101,22 @@ std::string int2048::to_string() const {
 
 
 /**
- * @brief Internal handle of increment in abs by 1.
- * @param src The source integer.
- * @note Make sure that this->data.size() == src.size().
- * This integer is allowed to be zero.
+ * @brief Return 
+ * @param __ptr Output pointer.
+ * @param __beg Begin of the range.
+ * @param __end End   of the range.
+ * @return Whether there is a carry.
  */
-void int2048::increment(const _Container &src) {
-    auto __beg = data.begin();
-    for(auto __current : src) {
-        auto __carry = __current + 1;
+bool int2048::increment
+    (_Iterator __ptr,_CIterator __beg,_CIterator __end) noexcept {
+    while(__beg != __end) {
+        auto __carry = *(__beg++) + 1;
         if (__builtin_expect(__carry < Base, 1)) {
-            return void (*__beg = __carry);
+            return *__ptr = __carry, false;
         } else {
-            *__beg++ = __carry - Base;
+            *__ptr++ = __carry - Base;
         }
-    } data.push_back(1);
+    } return true;
 }
 
 
@@ -125,18 +126,59 @@ void int2048::increment(const _Container &src) {
  * @note Make sure that this->data.size() == src.size().
  * This integer cannot be zero!
  */
-void int2048::decrement(const _Container &src) noexcept {
-    auto __beg = data.begin();
-    for(auto __current : src) {
-        auto __carry = __current - 1;
+bool int2048::decrement(_Iterator __ptr,_CIterator __beg,_CIterator __end) noexcept {
+    while(__beg != __end) {
+        auto __carry = *(__beg++) - 1;
         if (__builtin_expect(__carry < Base, 1)) {
-            return __carry ? void (*__beg = __carry) : data.pop_back();
+            return !(*__ptr = __carry);
         } else {
-            *__beg++ = __carry + Base;
+            *__ptr++ = __carry + Base;
         }
     } __builtin_unreachable();
 }
 
+
+void int2048::arith_add(const _Container &lhs, const _Container &rhs) {
+    auto __l = lhs.begin();
+    auto __r = rhs.begin();
+    auto __end = lhs.end();
+    _Word_Type __carry = 0;
+
+    while (__l != __end) {
+        auto __sum = *__l + *__r + __carry;
+        if (__sum < Base) {
+            __carry = 0;
+            data.push_back(__sum);
+        } else {
+            __carry = 1;
+            data.push_back(__sum - Base);
+        }
+        ++__l; ++__r;
+    }
+
+    while (__r != rhs.end()) {
+        auto __sum = *__r + __carry;
+        if (__builtin_expect(__sum < Base, 1)) {
+            __carry = 0;
+            data.push_back(__sum);
+        } else {
+            __carry = 1;
+            data.push_back(__sum - Base);
+        }
+        ++__r;
+    }
+    while (__r != rhs.end()) {
+
+    }
+
+
+
+    if (__carry) data.push_back(1);
+}
+
+void int2048::arith_sub(const _Container &lhs, const _Container &rhs) {
+    
+}
 
 /* Normal == comparation. */
 bool operator == (const int2048 &lhs, const int2048 &rhs) noexcept
@@ -160,11 +202,11 @@ std::strong_ordering operator <=> (const int2048 &lhs, const int2048 &rhs) noexc
 }
 
 
-/* Add the integers by 1. */
+/* Add the integer by 1. */
 int2048 &int2048::operator ++(void) {
     if (this->is_negative()) {
         this->abs_decrement();
-        this->sign = this->is_non_zero();
+        sign = this->is_non_zero();
     } else {
         this->abs_increment();
     }
@@ -177,8 +219,7 @@ int2048 &int2048::operator --(void) {
     if (this->is_negative()) {
         this->abs_increment();
     } else {
-        if (this->is_zero()) {
-            this->sign = true;
+        if (bool(sign = this->is_zero())) {
             this->data.push_back(1);
         } else {
             this->abs_decrement();
@@ -189,49 +230,78 @@ int2048 &int2048::operator --(void) {
 
 
 int2048 int2048::operator ++(int) {
-    int2048 __ret;
-    __ret.data.reserve(this->data.size() + 1);
+    int2048 __ret { this->data.size() + 1, nullptr };
     __ret.data.resize(this->data.size());
     if (this->is_negative()) {
-        __ret.decrement(this->data);
+        __ret.try_popout(
+            decrement(__ret.begin(), this->begin(), this->end())
+        );
         __ret.sign = this->is_non_zero();
     } else {
-        __ret.increment(this->data);
+        __ret.try_append(
+            increment(__ret.begin(), this->begin(), this->end())
+        );
+        __ret.sign = false;
     }
-    return *this;
+    this->swap(__ret);
+    return __ret;
+}
+
+
+int2048 int2048::operator --(int) {
+    int2048 __ret { this->data.size() + 1, nullptr };
+    __ret.data.resize(this->data.size());
+    if (this->is_negative()) {
+        __ret.try_append(
+            increment(__ret.begin(), this->begin(), this->end())
+        );
+        __ret.sign = true;
+    } else {
+        if (bool(__ret.sign = this->is_zero())) {
+            __ret.data.push_back(1);
+        } else {
+            __ret.try_popout(
+                decrement(__ret.begin(), this->begin(), this->end())
+            );
+        }
+        
+    }
+    this->swap(__ret);
+    return __ret;
 }
 
 
 int2048 operator + (const int2048 &lhs, const int2048 &rhs) {
     if (!lhs) return rhs;
     if (!rhs) return lhs;
+
     int2048 __ret;
     if (lhs.sign == rhs.sign) {
         __ret.sign = lhs.sign;
-        const std::size_t __len = int2048::get_add_length(lhs.data, rhs.data);
-        __ret.data.reserve(__len);
-
-
+        __ret.data.reserve(int2048::get_add_length(lhs.data, rhs.data));
         __ret.arith_add(lhs.data, rhs.data);
-
-    }
-}
-
-int2048 operator + (int2048 &&lhs, int2048 &&rhs) {
-    if (!lhs) return std::move(rhs);
-    if (!rhs) return std::move(lhs);
-    if (lhs.sign == rhs.sign) {
-
+    } else {
+        auto [__len,__bit] = int2048::get_sub_length(lhs.data, rhs.data);
+        __ret.data.reserve(__len);
+        __ret.sign = __bit ^ lhs.sign;
+        if (__bit)  __ret.arith_sub(rhs.data, lhs.data);
+        else        __ret.arith_sub(lhs.data, rhs.data);
     }
 
+    return __ret;
 }
 
+// int2048 operator + (int2048 &&lhs, int2048 &&rhs) {
+//     if (!lhs) return std::move(rhs);
+//     if (!rhs) return std::move(lhs);
+//     return 0;
+// }
 
-int2048 operator + (const int2048 &lhs, int2048 &&rhs) { return std::move(rhs += lhs); }
-int2048 operator + (int2048 &&lhs, const int2048 &rhs) { return std::move(lhs += rhs); }
+// int2048 operator + (const int2048 &lhs, int2048 &&rhs) { return std::move(rhs += lhs); }
+// int2048 operator + (int2048 &&lhs, const int2048 &rhs) { return std::move(lhs += rhs); }
 
-int2048 operator - (const int2048 &lhs, int2048 &&rhs) { return std::move(rhs -= lhs); }
-int2048 operator - (int2048 &&lhs, const int2048 &rhs) { return std::move(lhs -= rhs); }
+// int2048 operator - (const int2048 &lhs, int2048 &&rhs) { return std::move(rhs -= lhs); }
+// int2048 operator - (int2048 &&lhs, const int2048 &rhs) { return std::move(lhs -= rhs); }
 
 
 }

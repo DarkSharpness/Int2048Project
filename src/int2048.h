@@ -45,16 +45,43 @@ struct int2048_base {
     constexpr static _Word_Type parse_char(char __ch) { return __ch & 0xf; }
 };
 
+struct int2048;
+struct int2048_view;
+struct uint2048;
+struct uint2048_view;
+
+struct uint2048_view : int2048_base {
+  protected:
+    using _Base_Type = int2048_base;
+    using _Base_Type::_Word_Type;
+    using _Base_Type::_Container;
+    using _Iterator  = typename _Container::iterator;
+    using _CIterator = typename _Container::const_iterator; 
+
+    _CIterator beg;
+    _CIterator end;
+  
+
+  public:
+
+
+    std::string to_string() const;
+
+
+
+
+
+};
+
+
 
 struct int2048 : int2048_base {
   public:
     static_assert(cexp_pow(10, Base_Length) == Base, "Wrongly implemented!");
 
   protected:
-
-    static consteval std::size_t s_hash(const char *__str) {
-        while (*__str == '0') ++__str;
-    }
+    /* Init the array with a given size. */
+    int2048(size_t __n,std::nullptr_t) { data.reserve(__n); }
 
     /* Resize/reserve factor for a better buffering performance. */
     static std::size_t factor(std::size_t __n) noexcept {
@@ -63,24 +90,28 @@ struct int2048 : int2048_base {
 
     static std::size_t get_add_length
         (const _Container &__lhs, const _Container &__rhs) noexcept {
-        return std::max(__lhs.size(), __rhs.size());
+        return std::max(__lhs.size(), __rhs.size()) + 1;
     }
 
-    static ssize_t get_sub_length
+    static std::pair <std::size_t,bool> get_sub_length
         (const _Container &__lhs, const _Container &__rhs) noexcept {
-        if (__lhs.size() != __rhs.size()) return get_add_length(__lhs, __rhs);
+        if (__lhs.size() != __rhs.size()) 
+            return {
+                std::max(__lhs.size(), __rhs.size()),
+                __lhs.size() < __rhs.size()
+            };
+
         for (auto __l = __lhs.rbegin(), __r = __rhs.rbegin(), 
                   __end = __lhs.rend() ; __l != __end ; (void)++__l, ++__r) {
-            if (*__l != *__r) {
-                ssize_t __ret = __end - __l;
-                return *__l < *__r ? -__ret : __ret;
-            }
-        } return 0;
+            if (*__l != *__r) return { __end - __l , *__l < *__r };
+        } return {0,0};
     }
 
     using _Base_Type = int2048_base;
     using _Base_Type::_Word_Type;
     using _Base_Type::_Container;
+    using _Iterator  = typename _Container::iterator;
+    using _CIterator = typename _Container::const_iterator; 
 
     using _Base_Type::Base;
     using _Base_Type::Init_Length;
@@ -139,8 +170,15 @@ struct int2048 : int2048_base {
 
     void safe_print(std::string &) const;
 
-    void increment(const _Container &);
-    void decrement(const _Container &) noexcept;
+    int2048 &try_append(_Word_Type __val)
+    { if (__val) data.push_back(__val); return *this; }
+
+    int2048 &try_popout(_Word_Type __val)
+    { if (__val) data.resize(data.size() - __val); return *this;  }
+
+    [[nodiscard]] static bool increment(_Iterator,_CIterator,_CIterator) noexcept;
+    [[nodiscard]] static bool decrement(_Iterator,_CIterator,_CIterator) noexcept;
+
 
     void arith_add(const _Container &, const _Container &);
     void arith_sub(const _Container &, const _Container &);
@@ -187,12 +225,19 @@ struct int2048 : int2048_base {
 
     /* Assign from any signed integer. */
     int2048 &operator = (std::intmax_t __val) {
-        return *this = ((sign = __val < 0) ?
-            -static_cast <_Word_Type> (__val) : __val); 
+        data.clear();
+        init_fold <1> ((sign = __val < 0) ?
+            -static_cast <_Word_Type> (__val) : __val);
+        return *this;
     }
 
     /* Construct from an string. */
     explicit int2048(std::string_view __src) { this->parse(__src); }
+
+    auto begin() noexcept { return data.begin(); }
+    auto end()   noexcept { return data.end();   }
+    auto begin() const noexcept { return data.begin(); }
+    auto end()   const noexcept { return data.end();   }
 
   public:
     /* Return true iff this integer is zero. */
@@ -213,14 +258,14 @@ struct int2048 : int2048_base {
     int2048 &operator -- (void);
 
     friend int2048 &operator += (int2048 &, const int2048 &);
-    friend int2048 &operator += (int2048 &, int2048 &&);
+    // friend int2048 &operator += (int2048 &, int2048 &&);
     friend int2048 operator + (const int2048 &, const int2048 &);
-    friend int2048 operator + (int2048 &&, int2048 &&);
+    // friend int2048 operator + (int2048 &&, int2048 &&);
 
     friend int2048 &operator -= (int2048 &, const int2048 &);
-    friend int2048 &operator -= (int2048 &, int2048 &&);
+    // friend int2048 &operator -= (int2048 &, int2048 &&);
     friend int2048 operator - (const int2048 &, const int2048 &);
-    friend int2048 operator - (int2048 &&, int2048 &&);
+    // friend int2048 operator - (int2048 &&, int2048 &&);
 
     int2048 &operator *= (const int2048 &);
     friend int2048 operator * (int2048, const int2048 &);
@@ -255,15 +300,22 @@ struct int2048 : int2048_base {
   public:
 
     void swap (int2048 &__other) noexcept {
-        std::swap(this->data, __other.data);
+        this->data.swap(__other.data);
         std::swap(this->sign, __other.sign);
     }
 
     /* Increase the absolute value by 1 and return reference to self. */
-    int2048 &abs_increment() { this->increment(this->data); return *this; }
+    int2048 &abs_increment() {
+        return try_append (
+            increment(this->begin(),this->begin(),this->end())
+        );
+    }
     /* Decrease the absolute value by 1 and return reference to self. */
-    int2048 &abs_decrement() /* Decrement won't allocate space, thus noexcept. */
-                    noexcept { this->decrement(this->data); return *this; }
+    int2048 &abs_decrement() noexcept { /* Decrement won't allocate space, thus noexcept. */
+        return try_popout (
+            decrement(this->begin(),this->begin(),this->end())
+        );
+    }
 
     void parse(std::string_view);
     std::string to_string() const;
