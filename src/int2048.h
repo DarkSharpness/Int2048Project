@@ -6,9 +6,23 @@
 #include <cstdint>
 #include <iostream>
 
+/* Some declarations. */
 namespace dark {
 
+struct int2048;
+struct int2048_view;
+struct uint2048;
+struct uint2048_view;
+struct int2048_base;
 
+} // namespace dark
+
+namespace dark {
+
+/**
+ * @brief Base class for int2048.
+ * 
+ */
 struct int2048_base {
   protected:
     /* Common buffer for in and out. */
@@ -48,11 +62,11 @@ struct int2048_base {
     constexpr static _Word_Type parse_char(char __ch) { return __ch & 0xf; }
 };
 
-struct int2048;
-struct int2048_view;
-struct uint2048;
-struct uint2048_view;
-
+/**
+ * @brief View of an unsigned integer.
+ * It will not copy the data of the integer,
+ * but provide a view of the integer.
+ */
 struct uint2048_view : int2048_base {
   protected:
     friend class int2048_view;
@@ -80,8 +94,7 @@ struct uint2048_view : int2048_base {
 
     explicit uint2048_view(int2048_view) noexcept;
     explicit operator int2048_view() const noexcept;
-    explicit operator std::string() const { return this->to_string(); }
-
+    explicit operator std::string() const;
 
   public:
     std::string to_string() const;
@@ -91,7 +104,11 @@ struct uint2048_view : int2048_base {
     _Iterator end()   const noexcept { return _end; }
 };
 
-
+/**
+ * @brief View of a signed integer.
+ * It will not copy the data of the integer,
+ * but provide a view of the integer.
+ */
 struct int2048_view : int2048_base {
   protected:
     friend class uint2048_view;
@@ -118,11 +135,11 @@ struct int2048_view : int2048_base {
     explicit int2048_view(const uint2048 &) noexcept;
     explicit int2048_view(const uint2048 &&) = delete;
 
-    explicit int2048_view(uint2048_view,bool) noexcept;
     explicit int2048_view(uint2048_view) noexcept;
+    explicit int2048_view(uint2048_view,bool) noexcept;
 
     explicit operator uint2048_view() const noexcept;
-    explicit operator std::string() const { return this->to_string(); }
+    explicit operator std::string() const;
 
   public:
     _Iterator begin() const noexcept { return _beg; }
@@ -144,10 +161,12 @@ struct int2048_view : int2048_base {
 
 
 struct int2048 : int2048_base {
-  public:
+  protected:
     static_assert(cexp_pow(10, Base_Length) == Base, "Wrongly implemented!");
 
-  protected:
+    friend class int2048_view;
+    friend class uint2048_view;
+
     using _Base_Type = int2048_base;
     using _Base_Type::_Word_Type;
     using _Base_Type::_Container;
@@ -243,7 +262,7 @@ struct int2048 : int2048_base {
 
   public:
 
-    void swap (int2048 &__other) noexcept;
+    void swap(int2048 &__other) noexcept;
 
     int2048 &abs_increment();
     int2048 &abs_decrement() noexcept;
