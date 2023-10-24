@@ -79,8 +79,17 @@ struct int2048_base {
     static bool increment(_Iterator, uint2048_view) noexcept;
     static bool decrement(_Iterator, uint2048_view) noexcept;
 
-    static void add(_Iterator, uint2048_view, uint2048_view) noexcept;
-    static void sub(_Iterator, uint2048_view, uint2048_view) noexcept;
+    using cmp_t = struct {
+        std::size_t length;
+        std::strong_ordering cmp;
+    };
+    using add_t = _Word_Type;
+    using sub_t = std::size_t;
+
+    static cmp_t cmp(uint2048_view,uint2048_view) noexcept;
+    static add_t add(_Iterator, uint2048_view, uint2048_view) noexcept;
+    static sub_t sub(_Iterator, uint2048_view, uint2048_view) noexcept;
+
     static void mul(_Iterator, uint2048_view, uint2048_view) noexcept;
     static void div(_Iterator, uint2048_view, uint2048_view) noexcept;
 };
@@ -116,9 +125,9 @@ struct uint2048_view : int2048_base {
     uint2048_view() = default;
 
     explicit uint2048_view(const int2048 &) noexcept;
-    explicit uint2048_view(const int2048 &&) = delete;
+    // explicit uint2048_view(const int2048 &&) = delete;
     uint2048_view(const uint2048 &) noexcept;
-    uint2048_view(const uint2048 &&) = delete;
+    // uint2048_view(const uint2048 &&) = delete;
 
     explicit uint2048_view(int2048_view) noexcept;
 
@@ -131,6 +140,9 @@ struct uint2048_view : int2048_base {
 
     _Iterator begin() const noexcept { return _beg; }
     _Iterator end()   const noexcept { return _end; }
+
+    friend bool operator == (uint2048_view, uint2048_view) noexcept;
+    friend std::strong_ordering operator <=> (uint2048_view, uint2048_view) noexcept;
 
     [[nodiscard]]
     bool is_zero()          const noexcept { return _beg == _end; }
@@ -169,9 +181,9 @@ struct int2048_view : int2048_base {
     int2048_view() = default;
 
     int2048_view(const int2048 &) noexcept;
-    int2048_view(const int2048 &&) = delete;
+    // int2048_view(const int2048 &&) = delete;
     explicit int2048_view(const uint2048 &) noexcept;
-    explicit int2048_view(const uint2048 &&) = delete;
+    // explicit int2048_view(const uint2048 &&) = delete;
 
     explicit int2048_view(uint2048_view) noexcept;
     explicit int2048_view(uint2048_view,bool) noexcept;
@@ -195,6 +207,11 @@ struct int2048_view : int2048_base {
     friend int2048 operator + (int2048_view, int2048_view);
     friend int2048 operator - (int2048_view, int2048_view);
     friend int2048 operator * (int2048_view, int2048_view);
+
+    friend int2048 &operator += (int2048 &lhs, int2048_view rhs);
+
+    friend bool operator == (int2048_view, int2048_view) noexcept;
+    friend std::strong_ordering operator <=> (int2048_view, int2048_view) noexcept;
 
   public:
 
@@ -248,6 +265,9 @@ struct int2048 : int2048_base {
     /* Return the size of the data. */
     std::size_t size() const noexcept { return data.size(); }
 
+    _Iterator begin() noexcept { return data.begin(); }
+    _Iterator end()   noexcept { return data.end(); }
+
   public:
     /* Constructors and assignements. */
 
@@ -286,8 +306,8 @@ struct int2048 : int2048_base {
     int2048 operator ++ (void)&&; /* Sometimes this works better. */
     int2048 operator -- (void)&&; /* Sometimes this works better. */
 
-    friend int2048 &operator += (int2048 &, int2048_view) {}
-    friend int2048 &operator += (int2048 &, int2048 &&) {}
+    friend int2048 &operator += (int2048 &, int2048_view);
+    friend int2048 &operator += (int2048 &, int2048 &&);
 
     friend int2048 operator + (int2048_view, int2048 &&);
     friend int2048 operator + (int2048 &&, int2048_view);
@@ -314,9 +334,6 @@ struct int2048 : int2048_base {
     friend int2048 operator % (int2048, const int2048 &);
 
     friend std::istream &operator >> (std::istream &, int2048 &);
-
-    friend bool operator == (const int2048 &, const int2048 &) noexcept;
-    friend std::strong_ordering operator <=> (const int2048 &, const int2048 &) noexcept;
 
   public:
     void swap(int2048 &) noexcept;
@@ -406,7 +423,9 @@ struct int2048 : int2048_base {
     explicit operator std::string() const { return this->to_string(); }
 
     /* Reset this integer to 0. */
-    void reset() noexcept { sign = 0; data.clear(); }
+    int2048 &reset() & noexcept { sign = 0; data.clear(); return *this; }
+    /* Return 0. */
+    int2048 reset() && noexcept { return int2048(); }
 
     bool is_zero()          const noexcept { return data.empty(); }
     [[nodiscard]]

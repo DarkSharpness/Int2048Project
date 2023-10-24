@@ -47,7 +47,12 @@ struct vector {
     using const_iterator    = const _Tp *;
 
     vector() noexcept : head(), tail(), term() {}
-    ~vector() noexcept { deallocate(); }
+    ~vector() noexcept { this->deallocate(); }
+
+    vector (const _Tp *__beg, const _Tp *__end) : vector(__end - __beg) {
+        tail = term;
+        std::memcpy(head, __beg, this->size() * sizeof(_Tp));
+    }
 
     /* Reserve __n space for the vector. */
     vector(std::size_t __n) : head(alloc.allocate(__n)), tail(head), term(head + __n) {}
@@ -67,7 +72,7 @@ struct vector {
 
     vector &operator = (vector &&rhs) noexcept {
         if (this != &rhs) {
-            deallocate();
+            this->deallocate();
             this->steal(rhs);
         } return *this;
     }
@@ -89,10 +94,10 @@ struct vector {
      * @note __n should be no less than the size of the vector.
      */
     void set_capacity(std::size_t __n) {
-        _Tp *__next = alloc.allocate(__n);
+        _Tp *const __next = alloc.allocate(__n);
         std::memcpy(__next, head, this->size() * sizeof(_Tp));
-        alloc.deallocate(head, this->capacity());
-        tail += __next - head;
+        this->deallocate();
+        tail = __next + this->size();
         term = (head = __next) + __n;
     }
 
@@ -102,6 +107,17 @@ struct vector {
     _Tp &safe_push(const _Tp &__val) noexcept {
         if (this->vacancy() == 0) this->double_size();
         return this->push_back(__val);
+    }
+
+    /* Assign the vector with check. */
+    void assign(const _Tp *__beg, const _Tp *__end) noexcept {
+        const std::size_t _Length = __end - __beg;
+        if (_Length > this->capacity()) {
+            this->deallocate();
+            this->init_capacity(_Length);
+        }
+        this->resize(_Length);
+        std::memmove(head, __beg, _Length * sizeof(_Tp));
     }
 
     /* Pop back a new element without check. */
@@ -125,8 +141,7 @@ struct vector {
 
     /* Shrink the vector. */
     void shrink_to_fit() {
-        if (this->vacancy() != 0)
-            this->set_capacity(this->size());
+        if (this->vacancy() != 0) this->set_capacity(this->size());
     }
 
     _Tp &operator[](std::size_t __n) noexcept { return head[__n]; }

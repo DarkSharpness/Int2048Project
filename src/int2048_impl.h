@@ -52,9 +52,63 @@ int2048 &int2048::operator -- (void) & {
     return *this;
 }
 
-
 int2048 operator + (int2048_view, int2048_view) {
     __builtin_unreachable();
+}
+
+int2048 &operator += (int2048 &lhs, int2048_view rhs) {
+    if (rhs.is_zero()) return lhs;
+    if (lhs.is_zero()) return lhs = rhs;
+
+    if (lhs.sign == rhs.sign) {
+        if (lhs.size() < rhs.size()) {
+            lhs.data.reserve(rhs.size() + 1);
+            lhs.data.resize(rhs.size());
+            const auto __carry =
+                int2048::add(lhs.begin(), rhs.to_unsigned(), uint2048_view {lhs});
+            if (__carry) lhs.data.push_back(__carry);
+        } else {
+            const auto __carry =
+                int2048::add(lhs.begin(), uint2048_view {lhs}, rhs.to_unsigned());
+            if (__carry) lhs.data.safe_push(__carry);
+        }
+    } else { // lhs.sign != rhs.sign
+        auto __cmp = lhs.size() <=> rhs.size();
+        if (__cmp < 0) {
+            lhs.data.resize(rhs.size());
+            const auto __length =
+                int2048::sub(lhs.begin(), rhs.to_unsigned(), uint2048_view {lhs});
+            lhs.data.resize(__length);
+        } else if (__cmp > 0) {
+            const auto __length =
+                int2048::sub(lhs.begin(), uint2048_view {lhs}, rhs.to_unsigned());
+            lhs.data.resize(__length);
+        } else { // cmp == 0
+            const auto [__diff,__cmp] =
+                int2048::cmp(uint2048_view {lhs}, rhs.to_unsigned());
+
+            if (__cmp == 0) return lhs.reset();
+
+            lhs.data.resize(__diff + 1);
+            rhs._end = rhs._beg + __diff;
+
+            const auto __length =
+                __cmp < 0 ? /* Whether lhs is less than rhs.  */
+                   ((void)(lhs.sign = !lhs.sign),
+                    int2048::sub(lhs.begin(), rhs.to_unsigned(), uint2048_view {lhs})) :
+                    int2048::sub(lhs.begin(), uint2048_view {lhs}, rhs.to_unsigned())  ;
+
+            lhs.data.resize(__length);
+        }
+    } return lhs;
+}
+
+int2048 &operator += (int2048 &lhs, int2048 &&rhs) {
+    /* We use the one with larger buffer. */
+    if (lhs.data.capacity() < rhs.data.capacity())
+        return lhs = std::move(rhs += lhs);
+    else /* lhs capacity is larger now */
+        return lhs += int2048_view{rhs};
 }
 
 int2048 int2048::operator ++ (void) && { return std::move(this->operator ++ ()); }
@@ -82,6 +136,27 @@ int2048 operator - (int2048 &&lhs, int2048 &&rhs) { return std::move(lhs += std:
 
 /* Implementation of public member functions. */
 namespace dark {
+
+
+/* Explicitly construct from a view. */
+int2048::int2048(int2048_view __int) : data(__int._beg,__int._end), sign(__int.sign) {}
+/* Explicitly assign from a view. */
+int2048 &int2048::operator = (int2048_view __int) {
+    if (this->begin() == __int.begin()) {
+        this->data.resize(__int.size());
+    } else {
+        this->data.assign(__int._beg,__int._end);
+    }
+    this->sign = __int.sign;
+    return *this;
+}
+
+/* Explicitly construct from a string. */
+int2048::int2048(std::string_view __str) { this->parse(__str); }
+/* Explicitly assign from a string. */
+int2048 &int2048::operator = (std::string_view __str) {
+    this->parse(__str); return *this;
+}
 
 
 /* Set the sign of the number and return this. */
@@ -166,7 +241,7 @@ void int2048::parse(std::string_view __view) {
     else      ++__beg, this->sign = true;
 
     /* Filter out all leading 0s. */
-    while(*__beg == '0') if (++__beg == __end) return this->reset();
+    while(*__beg == '0') if (++__beg == __end) return (void)this->reset();
 
     /* First, clear the data and reserve the space. */
     this->data.clear();

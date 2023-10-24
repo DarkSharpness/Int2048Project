@@ -9,7 +9,7 @@ uint2048_view::uint2048_view(const int2048 &__int)
 noexcept : _beg(__int.data.begin()), _end(__int.data.end()) {}
 
 /* Not completed... */
-uint2048_view::uint2048_view(const uint2048 &__int) noexcept { __builtin_unreachable(); }
+uint2048_view::uint2048_view(const uint2048 &) noexcept { __builtin_unreachable(); }
 
 /* Construct explicitly from a signed view. */
 uint2048_view::uint2048_view(int2048_view __int)
@@ -37,10 +37,26 @@ void uint2048_view::to_string(std::string &__buf) const {
     __buf.resize(__end - __buf.data());
 }
 
+/**
+ * @return Return the number of digits of this number.
+ * (a.k.a. $log10(%this) + 1$)
+ * @note When this is 0, it will return 1.
+ */
 std::size_t uint2048_view::digits() const noexcept {
     if (this->is_zero()) return 1;
     return (this->size() - 1) * Base_Length
         + std::__detail::__to_chars_len(*(_end - 1));
+}
+
+bool operator == (uint2048_view lhs, uint2048_view rhs) noexcept {
+    constexpr std::size_t _Sizeof = sizeof(uint2048_view::_Word_Type);
+    return lhs.size() == rhs.size() &&
+        std::memcmp(lhs._beg,rhs._beg,lhs.size() * _Sizeof) == 0;
+}
+
+std::strong_ordering operator <=> (uint2048_view lhs, uint2048_view rhs) noexcept {
+    if (lhs.size() != rhs.size()) return lhs.size() <=> rhs.size();
+    return int2048_base::cmp(lhs,rhs).cmp;
 }
 
 } // namespace dark
@@ -118,12 +134,28 @@ void int2048_view::to_string(std::string &__buf) const {
     __buf.resize(__end - __buf.data());
 }
 
-
+/**
+ * @return Return the number of digits of this number.
+ * (a.k.a. $log10(%this) + 1$)
+ * @note When this is 0, it will return 1.
+ */
 std::size_t int2048_view::digits() const noexcept {
     if (this->is_zero()) return 1;
     return (this->size() - 1) * Base_Length
         + std::__detail::__to_chars_len(*(_end - 1));
 }
 
+/* Compare two numbers. */
+bool operator == (int2048_view lhs, int2048_view rhs) noexcept {
+    return lhs.sign == rhs.sign && lhs.to_unsigned() == rhs.to_unsigned();
+}
+
+/* Compare two numbers. */
+std::strong_ordering operator <=> (int2048_view lhs, int2048_view rhs) noexcept {
+    if (lhs.sign != rhs.sign) return rhs.sign <=> lhs.sign;
+    return lhs.sign ?
+        rhs.to_unsigned() <=> lhs.to_unsigned() :
+        lhs.to_unsigned() <=> rhs.to_unsigned();
+}
 
 } // namespace dark

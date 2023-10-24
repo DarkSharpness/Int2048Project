@@ -77,5 +77,33 @@ char *int2048_base::to_string(char *__buf,uint2048_view __int) noexcept {
 }
 
 
+/**
+ * @return The highest different base of two numbers and compare result.
+ * @note Make sure that the two numbers are equal in length.
+ * Make sure that none of the two numbers are 0.
+ */
+int2048_base::cmp_t
+    int2048_base::cmp(uint2048_view lhs,uint2048_view rhs) noexcept {
+    const auto __end = lhs.begin();
+    auto __lhs = lhs.end();
+    auto __rhs = rhs.end();
+    while (__lhs != __end) {
+        if (*--__lhs != *--__rhs)
+            return {
+                static_cast <std::size_t> (__lhs - __end),
+                *__lhs <=> *__rhs
+            };
+    } return {static_cast <std::size_t> (-1),std::strong_ordering::equal};
+}
+
+int2048_base::add_t
+    int2048_base::add(_Iterator __beg,uint2048_view lhs,uint2048_view rhs) noexcept {
+    __builtin_unreachable();
+}
+
+int2048_base::sub_t
+    int2048_base::sub(_Iterator __beg,uint2048_view lhs,uint2048_view rhs) noexcept {
+    __builtin_unreachable();
+}
 
 } // namespace dark
