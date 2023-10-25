@@ -103,7 +103,7 @@ int2048 &operator += (int2048 &lhs, int2048_view rhs) {
     if (lhs.sign == rhs.sign) {
         if (lhs.size() < rhs.size()) {
             lhs.data.reserve(rhs.size() + 1);
-            lhs.data.resize(rhs.size());
+            lhs.data.fill_size(rhs.size());
             const auto __carry =
                 int2048::add(lhs.begin(), rhs.to_unsigned(), uint2048_view {lhs});
             if (__carry) lhs.data.push_back(__carry);

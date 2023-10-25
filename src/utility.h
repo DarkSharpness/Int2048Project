@@ -97,6 +97,13 @@ struct vector {
         term = (head = __next) + __n;
     }
 
+    /* Fill the back vector with zero and resize */
+    void fill_size(std::size_t __n) {
+        auto *__next = head + __n;
+        std::memset(tail, 0, (__next - tail)  * sizeof(_Tp));
+        tail = __next;
+    }
+
     /* Push back a new element without check. */
     _Tp &push_back(const _Tp &__val) noexcept { return *(tail++) = __val; }
 
