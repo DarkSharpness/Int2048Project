@@ -27,12 +27,12 @@ namespace dark {
 struct int2048_base {
   public:
     /**
-     * @brief Common buffer for read-in.
-     * Users may perform anything they want on them.
-     * It just works as a flexible buffer for better performance.
+     * A common buffer for iostream operations only.
+     * Users may perform anything they want on it.
+     * It just works as a flexible space for better performance.
      * 
-     * Here are some examples how users may use this buffer:
-     * 1. Call .to_string(int2048_base::buffer) of an integer
+     * Here is one example of how users may use this buffer:
+     * 1. Call ::to_string(int2048_base::buffer) of an integer
      * to print out the same integer for multiple times.
      * 
      */
@@ -76,15 +76,20 @@ struct int2048_base {
 
     static char *to_string(char *, uint2048_view) noexcept;
 
-    static bool increment(_Iterator, uint2048_view) noexcept;
-    static bool decrement(_Iterator, uint2048_view) noexcept;
-
+    using inc_t = bool;
+    using cpy_t = _Iterator;
     using cmp_t = struct {
         std::size_t length;
         std::strong_ordering cmp;
     };
-    using add_t = _Word_Type;
-    using sub_t = std::size_t;
+    using add_t = bool;
+    using sub_t = _Iterator;
+
+
+    static inc_t inc(_Iterator, uint2048_view) noexcept;
+    static inc_t dec(_Iterator, uint2048_view) noexcept;
+
+    static cpy_t cpy(_Iterator, uint2048_view) noexcept;
 
     static cmp_t cmp(uint2048_view,uint2048_view) noexcept;
     static add_t add(_Iterator, uint2048_view, uint2048_view) noexcept;
@@ -119,6 +124,7 @@ struct uint2048_view : int2048_base {
     uint2048_view(_Iterator __beg, _Iterator __end)
     noexcept : _beg(__beg), _end(__end) {}
 
+    void resize(std::size_t __size) noexcept { _end = _beg + __size; }
     std::size_t size() const noexcept { return _end - _beg; }
 
   public:
@@ -175,6 +181,7 @@ struct int2048_view : int2048_base {
     int2048_view(_Iterator __beg, _Iterator __end, bool __sign = false)
     noexcept : _beg(__beg), _end(__end), sign(__sign) {}
 
+    void resize(std::size_t __size) noexcept { _end = _beg + __size; }
     std::size_t size() const noexcept { return _end - _beg; }
 
   public:
@@ -256,8 +263,8 @@ struct int2048 : int2048_base {
     using _Base_Type::fast_pow;
     using _Base_Type::make_char;
     using _Base_Type::parse_char;
-    using _Base_Type::increment;
-    using _Base_Type::decrement;
+    using _Base_Type::inc;
+    using _Base_Type::dec;
 
     _Container  data; /* Data of the integer.   */
     bool        sign; /* Sign of the integer.   */
@@ -309,6 +316,7 @@ struct int2048 : int2048_base {
     friend int2048 &operator += (int2048 &, int2048_view);
     friend int2048 &operator += (int2048 &, int2048 &&);
 
+    friend int2048 operator + (int2048_view, int2048_view);
     friend int2048 operator + (int2048_view, int2048 &&);
     friend int2048 operator + (int2048 &&, int2048_view);
     friend int2048 operator + (int2048 &&, int2048 &&);
@@ -316,6 +324,7 @@ struct int2048 : int2048_base {
     friend int2048 &operator -= (int2048 &, int2048_view);
     friend int2048 &operator -= (int2048 &, int2048 &&);
 
+    friend int2048 operator - (int2048_view, int2048_view);
     friend int2048 operator - (int2048_view, int2048 &&);
     friend int2048 operator - (int2048 &&, int2048_view);
     friend int2048 operator - (int2048 &&, int2048 &&);
@@ -323,6 +332,7 @@ struct int2048 : int2048_base {
     friend int2048 &operator *= (int2048 &, int2048_view);
     friend int2048 &operator *= (int2048 &, int2048 &&);
 
+    friend int2048 operator * (int2048_view, int2048_view);
     friend int2048 operator * (int2048_view, int2048 &&);
     friend int2048 operator * (int2048 &&, int2048_view);
     friend int2048 operator * (int2048 &&, int2048 &&);

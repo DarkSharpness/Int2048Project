@@ -56,7 +56,8 @@ bool operator == (uint2048_view lhs, uint2048_view rhs) noexcept {
 
 std::strong_ordering operator <=> (uint2048_view lhs, uint2048_view rhs) noexcept {
     if (lhs.size() != rhs.size()) return lhs.size() <=> rhs.size();
-    return int2048_base::cmp(lhs,rhs).cmp;
+    else if (lhs.size() == 0) return std::strong_ordering::equal;
+    else return int2048_base::cmp(lhs,rhs).cmp;
 }
 
 } // namespace dark

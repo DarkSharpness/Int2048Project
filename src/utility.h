@@ -4,11 +4,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace dark {
-
-
-namespace int2048_helper {
-
+namespace dark::int2048_helper {
 
 /**
  * @brief A simple yet fast vector implementation
@@ -134,6 +130,12 @@ struct vector {
     /* Resize the vector without check. */
     void resize(std::size_t __n) noexcept { tail = head + __n; }
 
+    /* Resize the vector without check. */
+    void resize(_Tp *__tail) noexcept { tail = __tail; }
+
+    /* Resize the vector without check. */
+    void revacancy(size_t __n) noexcept { tail = term - __n; }
+
     /* Reserve the vector safely. */
     void reserve(std::size_t __n) noexcept {
         if (__n > this->size()) this->set_capacity(__n);   
@@ -171,11 +173,5 @@ struct vector {
     }
 };
 
-
-}
-
-
-
-
-}
+} // namespace dark::int2048_helper
 

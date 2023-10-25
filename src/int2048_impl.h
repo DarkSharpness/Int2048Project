@@ -52,8 +52,48 @@ int2048 &int2048::operator -- (void) & {
     return *this;
 }
 
-int2048 operator + (int2048_view, int2048_view) {
-    __builtin_unreachable();
+int2048 operator + (int2048_view lhs, int2048_view rhs) {
+    if (lhs.is_zero()) return int2048{rhs};
+    if (rhs.is_zero()) return int2048{lhs};
+
+    int2048 __ret {};
+    if (lhs.sign == rhs.sign) {
+        __ret.sign = lhs.sign;
+        if (lhs.size() < rhs.size()) std::swap(lhs,rhs);
+        __ret.data.init_capacity(lhs.size() + 1);
+        __ret.data.revacancy(1); /* resize(size() - 1) */
+
+        const auto __carry =
+            int2048::add(__ret.begin(), lhs.to_unsigned(), rhs.to_unsigned());
+        if (__carry) __ret.data.safe_push(__carry);
+    } else {
+        auto __cmp = lhs.size() <=> rhs.size();
+        if (__cmp != 0) {
+            if (__cmp < 0) std::swap(lhs,rhs);
+            __ret.sign = lhs.sign;
+            __ret.data.init_capacity(lhs.size());
+
+            const auto __tail =
+                int2048::sub(__ret.begin(), lhs.to_unsigned(), rhs.to_unsigned());
+            __ret.data.resize(__tail);
+        } else {
+            const auto [__diff,__cmp] =
+                int2048::cmp(lhs.to_unsigned(), rhs.to_unsigned());
+            if (__cmp == 0) return __ret; /* lhs == rhs */
+            if (__cmp < 0) std::swap(lhs,rhs);
+
+            lhs.resize(__diff);
+            rhs.resize(__diff);
+
+            __ret.sign = lhs.sign;
+            __ret.data.init_capacity(__diff);
+
+            const auto __tail =
+                int2048::sub(__ret.begin(), lhs.to_unsigned(), rhs.to_unsigned());
+            __ret.data.resize(__tail);
+        }
+    }
+    return __ret;
 }
 
 int2048 &operator += (int2048 &lhs, int2048_view rhs) {
@@ -75,30 +115,31 @@ int2048 &operator += (int2048 &lhs, int2048_view rhs) {
     } else { // lhs.sign != rhs.sign
         auto __cmp = lhs.size() <=> rhs.size();
         if (__cmp < 0) {
-            lhs.data.resize(rhs.size());
-            const auto __length =
+            lhs.sign = rhs.sign;
+            lhs.data.reserve(rhs.size());
+            const auto __tail =
                 int2048::sub(lhs.begin(), rhs.to_unsigned(), uint2048_view {lhs});
-            lhs.data.resize(__length);
+            lhs.data.resize(__tail);
         } else if (__cmp > 0) {
-            const auto __length =
+            const auto __tail =
                 int2048::sub(lhs.begin(), uint2048_view {lhs}, rhs.to_unsigned());
-            lhs.data.resize(__length);
+            lhs.data.resize(__tail);
         } else { // cmp == 0
             const auto [__diff,__cmp] =
                 int2048::cmp(uint2048_view {lhs}, rhs.to_unsigned());
 
             if (__cmp == 0) return lhs.reset();
 
-            lhs.data.resize(__diff + 1);
-            rhs._end = rhs._beg + __diff;
+            lhs.data.resize(__diff);
+            rhs.resize(__diff);
 
-            const auto __length =
+            const auto __tail =
                 __cmp < 0 ? /* Whether lhs is less than rhs.  */
                    ((void)(lhs.sign = !lhs.sign),
                     int2048::sub(lhs.begin(), rhs.to_unsigned(), uint2048_view {lhs})) :
                     int2048::sub(lhs.begin(), uint2048_view {lhs}, rhs.to_unsigned())  ;
 
-            lhs.data.resize(__length);
+            lhs.data.resize(__tail);
         }
     } return lhs;
 }
@@ -190,10 +231,9 @@ int2048 int2048::abs_increment() && { return std::move(this->abs_increment()); }
  * @return Reference to this number.
  */
 int2048 &int2048::abs_increment() & {
-    bool __carry = increment(data.begin(),uint2048_view {*this});
+    bool __carry = int2048::inc(data.begin(),uint2048_view {*this});
     if (__builtin_expect(__carry,false)) {
         this->data.safe_push(1);
-        /* The sign will never change. */
     } return *this;
 }
 
@@ -207,7 +247,7 @@ int2048 int2048::abs_decrement() && noexcept { return std::move(this->abs_decrem
  * the behavior is undefined!
  */
 int2048 &int2048::abs_decrement() & noexcept {
-    bool __vacancy = decrement(data.begin(),uint2048_view {*this});
+    bool __vacancy = int2048::dec(data.begin(),uint2048_view {*this});
     if (__builtin_expect(__vacancy,false)) {
         this->data.pop_back();
         sign &= this->is_non_zero(); /* If 0, sign = false. */
