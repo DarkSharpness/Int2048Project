@@ -43,7 +43,7 @@ struct int2048_base {
     using _Container = int2048_helper::vector;
 
     /* Base of one word. */
-    inline static constexpr _Word_Type  Base        = static_cast <_Word_Type> (1e9);
+    inline static constexpr _Word_Type  Base = static_cast <_Word_Type> (1e9);
     /* Base length in decimal. */
     inline static constexpr std::size_t Base_Length = 9;
     /* Init the array with the least size. */
@@ -56,7 +56,8 @@ struct int2048_base {
 
   protected:
     /* Constexpr pow function. */
-    constexpr static _Word_Type fast_pow(_Word_Type __x, _Word_Type __y) {
+    constexpr static _Word_Type fast_pow(_Word_Type __x, _Word_Type __y)
+    noexcept {
         _Word_Type __ret = 1;
         while(__y) {
             if (__y & 1) __ret *= __x;
@@ -66,10 +67,10 @@ struct int2048_base {
     }
 
     /* Map a integer to a char. */
-    constexpr static char make_char(_Word_Type __val) { return __val | '0'; }
+    constexpr static char make_char(_Word_Type __val) noexcept { return __val | '0'; }
 
     /* Map a char into a integer. */
-    constexpr static _Word_Type parse_char(char __ch) { return __ch & 0xf; }
+    constexpr static _Word_Type parse_char(char __ch) noexcept { return __ch & 0xf; }
 
   protected:
     using _Iterator = typename _Container::iterator;
@@ -368,8 +369,6 @@ struct int2048 : int2048_base {
     void read(std::istream & = std::cin);
     void print(std::ostream & = std::cout) const;
 
-  protected:
-
   public:
     /**
      * ----------------------------------
@@ -435,7 +434,7 @@ struct int2048 : int2048_base {
     /* Reset this integer to 0. */
     int2048 &reset() & noexcept { sign = 0; data.clear(); return *this; }
     /* Return 0. */
-    int2048 reset() && noexcept { return int2048(); }
+    int2048 reset() && noexcept { return std::move(this->reset()); }
 
     bool is_zero()          const noexcept { return data.empty(); }
     [[nodiscard]]
@@ -449,6 +448,8 @@ struct int2048 : int2048_base {
     bool is_positive()      const noexcept { return !is_negative() && !this->is_zero(); }
     [[nodiscard]]
     bool is_non_positive()  const noexcept { return  is_negative() ||  this->is_zero(); }
+
+  protected:
 
     /* Init from an _Word_Type. */
     template <std::size_t _Beg>
