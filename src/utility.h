@@ -1,6 +1,6 @@
 #pragma once
 
-#include <memory>
+#include "memory.h"
 #include <cstdint>
 #include <cstring>
 
@@ -13,7 +13,7 @@ namespace dark::int2048_helper {
 struct vector {
   protected:
     using _Tp       = std::uintmax_t;
-    using _Alloc    = std::allocator <_Tp>;
+    using _Alloc    = dark::allocator <_Tp>;
 
     [[no_unique_address]] _Alloc alloc;
     _Tp *head;
@@ -54,7 +54,8 @@ struct vector {
     vector(std::size_t __n) : head(alloc.allocate(__n)), tail(head), term(head + __n) {}
 
     vector(const vector &rhs) : vector(rhs.size())  {
-        std::memcpy(head, rhs.head, rhs.size() * sizeof(_Tp));
+        this->resize(rhs.size());
+        std::memcpy(head, rhs.head, size() * sizeof(_Tp));
     }
 
     vector(vector &&rhs) noexcept { this->steal(rhs); }
@@ -62,6 +63,7 @@ struct vector {
     vector &operator = (const vector &rhs) {
         if (this != &rhs) {
             this->reserve(rhs.size());
+            this->resize(rhs.size());
             std::memcpy(head, rhs.head, rhs.size() * sizeof(_Tp));
         } return *this;
     }
@@ -98,8 +100,8 @@ struct vector {
     }
 
     /* Fill the back vector with zero and resize */
-    void fill_size(std::size_t __n) {
-        auto *__next = head + __n;
+    void fill_size(std::size_t __n) noexcept {
+        _Tp *__next = head + __n;
         std::memset(tail, 0, (__next - tail)  * sizeof(_Tp));
         tail = __next;
     }
@@ -128,7 +130,7 @@ struct vector {
 
     /* Double the capacity of the vector. */
     void double_size() {
-        return this->set_capacity(this->size() | !this->size());
+        return this->set_capacity(this->size() << 1 | !this->size());
     }
 
     /* Clear the vector without check. */
@@ -145,7 +147,7 @@ struct vector {
 
     /* Reserve the vector safely. */
     void reserve(std::size_t __n) noexcept {
-        if (__n > this->size()) this->set_capacity(__n);   
+        if (__n > this->capacity()) this->set_capacity(__n);   
     }
 
     /* Shrink the vector. */
