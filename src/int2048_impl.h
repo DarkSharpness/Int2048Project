@@ -286,7 +286,7 @@ void int2048::parse(std::string_view __view) {
     /* First, clear the data and reserve the space. */
     this->data.clear();
     std::size_t _Length =
-        (__view.size() + (Base_Length - 1)) / Base_Length;
+        (__end - __beg + (Base_Length - 1)) / Base_Length;
     this->data.reserve(_Length);
 
     /* Then, parse the string. */
