@@ -2,40 +2,45 @@
 // Used to test the correctness of the program.
 #pragma once
 
+#include <string>
+#include <format>
 #include <iostream>
 #include <cstddef>
 #include <utility>
 #include <type_traits>
-
+#include <cstdlib>
+#include <bits/allocator.h> // Used for constexpr allocator.
 
 namespace dark {
 
 
+/* Error code. */
 struct error {
     std::string data;
-    explicit error(error *) {}
-
-    explicit error(std::string __s) : data(std::move(__s))
+    explicit error(std::string __s) noexcept : data(std::move(__s))
     { std::cerr << "\n\033[31mFatal error: " << data << "\n\033[0m"; }
-
     const char *what() const noexcept { return data.c_str(); }
 };
 
 
+/* Warning code. */
 struct warning {
     std::string data;
-    explicit warning(warning *) {}
-
-    warning(std::string __s) {
-        std::cerr << "\033[33mWarning: " << __s << "\n\033[0m";
-    }
-
+    explicit warning(std::string __s) noexcept : data(std::move(__s))
+    { std::cerr << "\033[33mWarning: " << data << "\n\033[0m"; }
     const char *what() const noexcept { return data.c_str(); }
 };
 
 
+/* Normal code. */
+struct normal {
+    std::string data;
+    explicit normal(std::string __s) noexcept : data(std::move(__s))
+    { std::cerr << "\033[32m" << data << "\n\033[0m"; }
+    const char *what() const noexcept { return data.c_str(); }
+};
 
-}
+} // namespace dark
 
 
 namespace dark {
@@ -142,15 +147,10 @@ noexcept(std::is_nothrow_destructible_v <_Tp>)
 } // namespace dark
 
 
-#include <cstdlib>
-#include <type_traits>
-#include <utility>
-
 namespace dark {
 
 
 #ifdef _DARK_DEBUG
-
 class allocator_debugger;
 
 class allocator_debug_helper {
@@ -162,98 +162,113 @@ class allocator_debug_helper {
 
     friend class allocator_debugger;
 
-
     size_t refer_count = 0;
     size_t alloc_count = 0;
     size_t freed_count = 0;
-
     size_t alloc_times = 0;
     size_t freed_times = 0;
 
     inline static allocator_debug_helper *single = nullptr;
     inline static constexpr size_t offset = sizeof(debug_pack);
 
-    allocator_debug_helper() = delete;
-    allocator_debug_helper(std::nullptr_t) noexcept {
-        std::cerr << "\033[32mDebug allocator is enabled!\n\033[0m";
+    allocator_debug_helper() noexcept {
+        normal("Debug allocator is enabled!");
     }
 
-    void *allocate(void *__beg,size_t __n) {
-        if(!__beg) return nullptr;
-        ++alloc_times;
+    /* Aligned to offset. */
+    static size_t pack_length(size_t __n) noexcept {
+        return (__n + (offset - 1)) / offset + 2;
+    }
+
+    /* Aligned to offset. */
+    static size_t real_size(size_t __n) noexcept {
+        return pack_length(__n) * offset;
+    }
+
+    /* Perform some operation on allocated memory. */
+    void *allocate(void *__ptr,size_t __n) {
+        if(!__ptr) throw std::bad_alloc {};
+
+        alloc_times += 1;
         alloc_count += __n;
 
-        void *__last = static_cast <char *> (__beg) + __n + offset * 2;
-        debug_pack *__end = static_cast <debug_pack *> (__last) - 1;
-        __end->pointer = this;
-        __end->count   = __n;
-
-        debug_pack *__tmp = static_cast <debug_pack *> (__beg);
-        __tmp->pointer = this;
-        __tmp->count   = __n;
-
+        debug_pack __val = {this, __n};
+        auto * const __tmp = static_cast <debug_pack *> (__ptr);
+        *__tmp = __val;
+        *(__tmp + pack_length(__n) - 1) = __val;
         return __tmp + 1;
     }
 
+    /* Perform some operation before deallocation. */
     void *deallocate(void *__ptr) {
         if(!__ptr) return nullptr;
-        ++freed_times;
-        debug_pack *__tmp = static_cast <debug_pack *> (__ptr) - 1;
-        if(__tmp->pointer != this) throw error("Deallocate Mismatch 1!");
+        auto *const __tmp = static_cast <debug_pack *> (__ptr) - 1;
+        debug_pack __val = *__tmp;
 
-        void *__beg = static_cast <void *> (__tmp);
-        void *__last = static_cast <char *> (__beg) + __tmp->count + offset * 2;
+        if (__val.pointer != this)
+            throw error("Invalid deallocation!");
 
-        debug_pack *__end = static_cast <debug_pack *> (__last) - 1;
-        if(__end->pointer != this) throw error("Deallocate Mismatch 2!");
-        if(__end->count != __tmp->count) throw error("Deallocate Mismatch 3!");
+        auto *__end = __tmp + pack_length(__val.count) - 1;
+        if (__end->pointer != this
+        ||  __end->count != __val.count)
+            throw error("Invalid deallocation!");
 
-        freed_count += __tmp->count;
+        freed_times += 1;
+        freed_count += __val.count;
 
         return __tmp;
     }
 
     static allocator_debug_helper *get_object() {
-        if(single == nullptr) single = new allocator_debug_helper(nullptr);
+        if(single == nullptr)
+            single = new allocator_debug_helper {};
         ++single->refer_count;
         return single;
     }
 
-    ~allocator_debug_helper() noexcept(false) {
-        if(alloc_count != freed_count || alloc_times != freed_times)
-            throw error("Mismatched allocation and deallocation!\n" + 
-                std::to_string(alloc_times) + " allocations, " +
-                std::to_string(freed_times) + " deallocations!\n" + 
-                "Totally " + std::to_string(alloc_count - freed_count) + " bytes leaked!");
-        std::cerr << "\n\033[32mNo memory leak is found!\n\033[0m";
+    ~allocator_debug_helper() noexcept {
+        auto __str = std::format (
+                // "Memory leak detected!\n"
+                "Allocated: {} bytes, {} times.\n"
+                "Freed: {} bytes, {} times.\n"
+                "Total loss: {} bytes, {} times.\n",
+                alloc_count, alloc_times,
+                freed_count, freed_times,
+                alloc_count - freed_count,
+                alloc_times - freed_times
+            );
+        if (alloc_count != freed_count || alloc_times != freed_times) {
+            error("\nMemory leak detected!\n" + __str);
+        } else {
+            normal("\nNo memory leak is found!\n" + __str);
+        }
     }
 };
 
-/* Debug allocator (It will leak only a size of 16 bytes). */
-
+/* Debug allocator. It is a safer wrapper of debug_helper. */
 class allocator_debugger {
   private:
     allocator_debug_helper *__obj;
   public:
-    allocator_debugger() noexcept {
-        __obj = allocator_debug_helper::get_object();
-    }
-    ~allocator_debugger() noexcept(false) {
-        if(!--__obj->refer_count) delete __obj;
-    }
-    void *allocate(size_t __n) noexcept {
-        return __obj->allocate(::std::malloc(__n + __obj->offset * 2),__n);
+    allocator_debugger() noexcept : 
+        __obj(allocator_debug_helper::get_object()) {}
+    ~allocator_debugger() noexcept { if(!--__obj->refer_count) delete __obj; }
+    /* Aligned to offset. */
+    void *allocate(size_t __n) {
+        return __obj->allocate(::std::malloc(__obj->real_size(__n)),__n);
     }
     void deallocate(void *__ptr) noexcept {
         ::std::free(__obj->deallocate(__ptr));
     }
 };
 
+/* A safer wrapper of malloc and free. */
 inline void *malloc(size_t __n) noexcept {
     static allocator_debugger __obj;
     return __obj.allocate(__n);
 }
 
+/* A safer wrapper of malloc and free. */
 inline void free(void *__ptr) noexcept {
     static allocator_debugger __obj;
     return __obj.deallocate(__ptr);
@@ -318,25 +333,42 @@ using ::std::free;
 
 
 /* A simple allocator. */
-template <class T>
+template <class _Tp>
 struct allocator {
-    inline static constexpr size_t __N = sizeof(T);
+    inline static constexpr size_t __N = sizeof(_Tp);
 
     template <class U>
     struct rebind { using other = allocator<U>; };
 
     using size_type         = size_t;
     using difference_type   = ptrdiff_t;
-    using value_type        = T;
-    using pointer           = T *;
-    using reference         = T &;
-    using const_pointer     = const T*;
-    using const_reference   = const T&;
+    using value_type        = _Tp;
+    using pointer           = _Tp *;
+    using reference         = _Tp &;
+    using const_pointer     = const _Tp*;
+    using const_reference   = const _Tp&;
 
-    static T *allocate(size_t __n) { return static_cast <T *> (::dark::malloc(__n * __N)); }
-    static void deallocate(T *__ptr, [[maybe_unused]] size_t __n) noexcept { ::dark::free(__ptr); }
+    [[nodiscard,__gnu__::__always_inline__]]
+    constexpr static _Tp *allocate(size_t __n) {
+        if consteval {
+            return std::allocator <_Tp> {}.allocate(__n);
+        } else {
+            return static_cast <_Tp *> (::dark::malloc(__n * __N));
+        }
+    }
+
+    [[__gnu__::__always_inline__]]
+    constexpr static void deallocate(_Tp *__ptr,[[maybe_unused]] size_t __n)
+    noexcept {
+        if consteval {
+            return std::allocator <_Tp> {}.deallocate(__ptr,__n);
+        } else {
+            return ::dark::free(__ptr);
+        }
+    }
 };
 
 
 
 } // namespace dark
+
