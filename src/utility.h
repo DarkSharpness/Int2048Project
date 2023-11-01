@@ -155,11 +155,17 @@ struct vector {
         if (this->vacancy() != 0) this->set_capacity(this->size());
     }
 
-    _Tp &operator[](std::size_t __n) noexcept { return head[__n]; }
-    const _Tp &operator[](std::size_t __n) const noexcept { return head[__n]; }
+    /* Swap the content. */
+    void swap(vector &rhs) noexcept {
+        std::swap(head, rhs.head);
+        std::swap(tail, rhs.tail);
+        std::swap(term, rhs.term);
+    }
 
   public:
     /* Some necessary interfaces. */
+    _Tp &operator[](std::size_t __n) noexcept { return head[__n]; }
+    const _Tp &operator[](std::size_t __n) const noexcept { return head[__n]; }
 
     std::size_t size()     const noexcept { return tail - head; }
     std::size_t capacity() const noexcept { return term - head; }
@@ -184,3 +190,13 @@ struct vector {
 
 } // namespace dark::int2048_helper
 
+namespace std {
+
+/* Overload of std::swap vector */
+void swap
+    (dark::int2048_helper::vector &__lhs, dark::int2048_helper::vector &__rhs)
+    noexcept {
+    __lhs.swap(__rhs);
+}
+
+}
