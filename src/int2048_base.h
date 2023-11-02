@@ -1,5 +1,7 @@
 #pragma once
+
 #include "int2048.h"
+#include <bit>
 
 /* Implementation of int2048 base. */
 namespace dark {
@@ -37,7 +39,7 @@ int2048_base::inc_t
  * @note Ensure that the output iterator has enough space.
  * If the input range is 0, the behavior is undefined!
  */
-int2048_base::inc_t
+int2048_base::dec_t
     int2048_base::dec(_Iterator __ptr,uint2048_view __int) noexcept {
     auto __beg = __int.begin();
     auto __end = __int.end();
@@ -168,5 +170,41 @@ int2048_base::sub_t
         } return __ptr;
     }
 }
+
+
+/**
+ * @brief Mul lhs and rhs to __ptr.
+ * @param __ptr Output range.
+ * @return Iterator to the tail of the result.
+ */
+int2048_base::mul_t
+    int2048_base::mul(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept {
+    if (is_brute_mulable(lhs,rhs)) return brute_mul(__ptr,lhs,rhs);
+    /* Core: FFT multiplication. */
+
+    const auto _Max_Length  = lhs.size() + rhs.size(); // It should be no less than 2.
+    const auto _Bit_Length  = 32 - std::countl_zero <std::uint32_t> (_Max_Length - 1);
+    const auto _Length      = std::size_t {1} << _Bit_Length;
+
+    auto __fft = make_FFT(lhs,rhs,_Length);
+
+}
+
+int2048_base::FFT_t
+    int2048_base::make_FFT(uint2048_view lhs,uint2048_view rhs,std::size_t __len) noexcept {
+    FFT_t __fft; __fft.reserve(__len);
+
+    if (lhs.size() < rhs.size()) std::swap(lhs,rhs);
+    auto __lhs = lhs.begin();
+
+    /* Clear rhs and then clear lhs. */
+    for (const auto __cur : rhs) __fft.push_back({*__lhs++,__cur});
+    while(__lhs != lhs.end())    __fft.push_back({*__lhs++,  0  });
+
+    /* Fill the reset with 0. */
+    __fft.resize(__len);
+    return __fft;
+}
+
 
 } // namespace dark

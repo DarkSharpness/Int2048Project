@@ -1,8 +1,9 @@
 #pragma once
 
-// #include <vector>
 #include "utility.h"
+#include <vector>
 #include <limits>
+#include <complex>
 #include <cstring>
 #include <cstdint>
 #include <iostream>
@@ -54,6 +55,7 @@ struct int2048_base {
     inline static constexpr std::size_t Word_Length =
         std::numeric_limits <_Word_Type>::digits10 / Base_Length + 1;
 
+
   protected:
     /* Constexpr pow function. */
     constexpr static _Word_Type fast_pow(_Word_Type __x, _Word_Type __y)
@@ -78,17 +80,27 @@ struct int2048_base {
     static char *to_string(char *, uint2048_view) noexcept;
 
     using inc_t = bool;
+    using dec_t = bool;
     using cpy_t = _Iterator;
-    using cmp_t = struct {
-        std::size_t length;
-        std::strong_ordering cmp;
+    using cmp_t = struct _Cmp_Type {
+        using cmp_result_t = std::strong_ordering;
+        std::size_t length; /* Length of the different. */
+        cmp_result_t cmp;   /* Compare result.          */
     };
     using add_t = bool;
     using sub_t = _Iterator;
+    using mul_t = _Iterator;
+    using div_t = struct _Div_Type {
+        std::size_t length; /* Length of the quotient.  */
+        _Container  remain; /* Remainders in container. */
+    };
 
+    /* The container for FFT operation. */
+    using FFT_t = std::vector <std::complex <double>>;
+    // using INV_t = 
 
     static inc_t inc(_Iterator, uint2048_view) noexcept;
-    static inc_t dec(_Iterator, uint2048_view) noexcept;
+    static dec_t dec(_Iterator, uint2048_view) noexcept;
 
     static cpy_t cpy(_Iterator, uint2048_view) noexcept;
 
@@ -96,8 +108,21 @@ struct int2048_base {
     static add_t add(_Iterator, uint2048_view, uint2048_view) noexcept;
     static sub_t sub(_Iterator, uint2048_view, uint2048_view) noexcept;
 
-    static void mul(_Iterator, uint2048_view, uint2048_view) noexcept;
-    static void div(_Iterator, uint2048_view, uint2048_view) noexcept;
+    static mul_t mul(_Iterator, uint2048_view, uint2048_view) noexcept;
+    static div_t div(_Iterator, uint2048_view, uint2048_view) noexcept;
+
+  protected:
+
+    static bool is_brute_mulable(uint2048_view, uint2048_view) noexcept;
+    static bool is_brute_divable(uint2048_view, uint2048_view) noexcept;
+
+    static mul_t brute_mul(_Iterator, uint2048_view, uint2048_view) noexcept;
+    static div_t brute_div(_Iterator, uint2048_view, uint2048_view) noexcept;
+
+    static FFT_t make_FFT(uint2048_view,uint2048_view,std::size_t) noexcept;
+  
+  public:
+    // static constexpr std::size_t max_size() noexcept {}
 };
 
 /**
