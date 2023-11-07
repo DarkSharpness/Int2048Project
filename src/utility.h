@@ -1,7 +1,6 @@
 #pragma once
 
 #include "memory.h"
-#include <cstdint>
 #include <cstring>
 
 namespace dark::int2048_helper {
@@ -10,9 +9,9 @@ namespace dark::int2048_helper {
  * @brief A simple yet fast vector implementation
  * for int2048 to use.
  */
+template <typename _Tp>
 struct vector {
   protected:
-    using _Tp       = std::uintmax_t;
     using _Alloc    = dark::allocator <_Tp>;
 
     [[no_unique_address]] _Alloc alloc;
@@ -42,7 +41,7 @@ struct vector {
     using iterator          = _Tp *;
     using const_iterator    = const _Tp *;
 
-    vector() noexcept : head(), tail(), term() {}
+    constexpr vector() noexcept : head(), tail(), term() {}
     ~vector() noexcept { this->deallocate(); }
 
     vector (const _Tp *__beg, const _Tp *__end) : vector(__end - __beg) {
@@ -55,7 +54,7 @@ struct vector {
 
     vector(const vector &rhs) : vector(rhs.size())  {
         this->resize(rhs.size());
-        std::memcpy(head, rhs.head, size() * sizeof(_Tp));
+        std::memcpy((void *)head, rhs.head, size() * sizeof(_Tp));
     }
 
     vector(vector &&rhs) noexcept { this->steal(rhs); }
@@ -99,19 +98,27 @@ struct vector {
         term = (head = __next) + __n;
     }
 
-    /* Fill the back vector with zero and resize */
+    /* Resize as given and fill to size with 0. */
     void fill_size(std::size_t __n) noexcept {
-        _Tp *__next = head + __n;
-        std::memset(tail, 0, (__next - tail)  * sizeof(_Tp));
+        _Tp *const __next = head + __n;
+        std::memset((void *)tail, 0, (__next - tail)  * sizeof(_Tp));
         tail = __next;
     }
 
     /* Push back a new element without check. */
     _Tp &push_back(const _Tp &__val) noexcept { return *(tail++) = __val; }
 
+    /* Push back a new element safely. */
     _Tp &safe_push(const _Tp &__val) noexcept {
         if (this->vacancy() == 0) this->double_size();
         return this->push_back(__val);
+    }
+
+    /* Construct a new element in the back without check. */
+    template <typename ..._Args>
+    requires std::constructible_from <_Tp, _Args...>
+    _Tp &emplace_back(_Args &&...__args) noexcept {
+        return *(tail++) = _Tp(std::forward <_Args>(__args)...);
     }
 
     /* Assign the vector with check. */
@@ -188,15 +195,16 @@ struct vector {
     }
 };
 
+
 } // namespace dark::int2048_helper
 
 namespace std {
 
 /* Overload of std::swap vector */
+template <typename _Tp>
 void swap
-    (dark::int2048_helper::vector &__lhs, dark::int2048_helper::vector &__rhs)
-    noexcept {
-    __lhs.swap(__rhs);
-}
+    (dark::int2048_helper::vector <_Tp> &__lhs,
+     dark::int2048_helper::vector <_Tp> &__rhs)
+noexcept { __lhs.swap(__rhs); }
 
 }
