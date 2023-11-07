@@ -1,7 +1,6 @@
 #pragma once
 
 #include "utility.h"
-#include <vector>
 #include <limits>
 #include <complex>
 #include <cstring>
@@ -21,11 +20,48 @@ struct int2048_base;
 
 namespace dark {
 
+struct FFT_base {
+    /* Maximum bit length of FFT. */
+    inline static constexpr std::size_t FFT_Max = 20;
+
+    using complex       = std::complex <double>;
+    using FFT_Table_t   = std::array <complex, FFT_Max>;
+    static const complex *root_table() noexcept {
+        using cpx = std::complex <double>;
+        static constexpr FFT_Table_t __table = { // cos (pi / (1 << i)) , sin(pi / (1 << i))
+            cpx{ -1.0 , 0.0 }, // 0
+            cpx{ 0.0  , 1.0 }, // 1
+            cpx{ 0.7071067811865476 , 0.7071067811865475 }, // 2
+            cpx{ 0.9238795325112867 , 0.3826834323650898 }, // 3
+            cpx{ 0.9807852804032304 , 0.19509032201612825 }, // 4
+            cpx{ 0.9951847266721969 , 0.0980171403295606 }, // 5
+            cpx{ 0.9987954562051724 , 0.049067674327418015 }, // 6
+            cpx{ 0.9996988186962042 , 0.024541228522912288 }, // 7
+            cpx{ 0.9999247018391445 , 0.012271538285719925 }, // 8
+            cpx{ 0.9999811752826011 , 0.006135884649154475 }, // 9
+            cpx{ 0.9999952938095762 , 0.003067956762965976 }, // 10
+            cpx{ 0.9999988234517019 , 0.0015339801862847655 }, // 11
+            cpx{ 0.9999997058628822 , 0.0007669903187427045 }, // 12
+            cpx{ 0.9999999264657179 , 0.00038349518757139556 }, // 13
+            cpx{ 0.9999999816164293 , 0.0001917475973107033 }, // 14
+            cpx{ 0.9999999954041073 , 9.587379909597734e-05 }, // 15
+            cpx{ 0.9999999988510269 , 4.793689960306688e-05 }, // 16
+            cpx{ 0.9999999997127567 , 2.396844980841822e-05 }, // 17
+            cpx{ 0.9999999999281892 , 1.1984224905069705e-05 }, // 18
+            cpx{ 0.9999999999820472 , 5.9921124526424275e-06 }, // 19
+        };
+        return __table.data();
+    }
+
+    static void  FFT(complex *, std::size_t) noexcept;
+    static void IFFT(complex *, std::size_t) noexcept;
+};
+
 /**
  * @brief Base class for int2048.
  * 
  */
-struct int2048_base {
+struct int2048_base : protected FFT_base {
   public:
     /**
      * A common buffer for iostream operations only.
@@ -41,12 +77,12 @@ struct int2048_base {
   protected:
 
     using _Word_Type = std::uintmax_t;
-    using _Container = int2048_helper::vector;
+    using _Container = int2048_helper::vector <_Word_Type>;
 
     /* Base of one word. */
-    inline static constexpr _Word_Type  Base = static_cast <_Word_Type> (1e9);
+    inline static constexpr _Word_Type  Base = static_cast <_Word_Type> (1e8);
     /* Base length in decimal. */
-    inline static constexpr std::size_t Base_Length = 9;
+    inline static constexpr std::size_t Base_Length = 8;
     /* Init the array with the least size. */
     inline static constexpr std::size_t Init_Sizeof = 64;
     /* Init the array with this minimum size. */
@@ -55,24 +91,30 @@ struct int2048_base {
     inline static constexpr std::size_t Word_Length =
         std::numeric_limits <_Word_Type>::digits10 / Base_Length + 1;
 
+  protected:
+
+    /* FFT zip times. */
+    inline static constexpr std::size_t FFT_Zip     = 2;
+    /* FFT Base Word. */
+    inline static constexpr _Word_Type  FFT_Base    = 1e4;
 
   protected:
+
     /* Constexpr pow function. */
-    constexpr static _Word_Type fast_pow(_Word_Type __x, _Word_Type __y)
+    static constexpr _Word_Type fast_pow(_Word_Type __x, _Word_Type __y)
     noexcept {
         _Word_Type __ret = 1;
         while(__y) {
             if (__y & 1) __ret *= __x;
             __x *= __x; __y >>= 1;
-        }
-        return __ret;
+        } return __ret;
     }
 
     /* Map a integer to a char. */
-    constexpr static char make_char(_Word_Type __val) noexcept { return __val | '0'; }
+    static constexpr char make_char(_Word_Type __val) noexcept { return __val | '0'; }
 
     /* Map a char into a integer. */
-    constexpr static _Word_Type parse_char(char __ch) noexcept { return __ch & 0xf; }
+    static constexpr _Word_Type parse_char(char __ch) noexcept { return __ch & 0xf; }
 
   protected:
     using _Iterator = typename _Container::iterator;
@@ -96,8 +138,9 @@ struct int2048_base {
     };
 
     /* The container for FFT operation. */
-    using FFT_t = std::vector <std::complex <double>>;
-    // using INV_t = 
+    using fft_t = int2048_helper::vector <complex>;
+    using idx_t = std::uint32_t;
+    using rev_t = int2048_helper::vector <idx_t>;
 
     static inc_t inc(_Iterator, uint2048_view) noexcept;
     static dec_t dec(_Iterator, uint2048_view) noexcept;
@@ -119,8 +162,11 @@ struct int2048_base {
     static mul_t brute_mul(_Iterator, uint2048_view, uint2048_view) noexcept;
     static div_t brute_div(_Iterator, uint2048_view, uint2048_view) noexcept;
 
-    static FFT_t make_FFT(uint2048_view,uint2048_view,std::size_t) noexcept;
-  
+    static fft_t make_fft(uint2048_view,uint2048_view, const std::size_t);
+    static rev_t make_rev(std::size_t);
+
+    static void swap_rev(complex *,const idx_t *, std::size_t) noexcept;
+
   public:
     // static constexpr std::size_t max_size() noexcept {}
 };
@@ -166,6 +212,9 @@ struct uint2048_view : int2048_base {
     explicit operator std::string() const;
 
   public:
+
+    friend int2048 &operator *= (int2048 &lhs, int2048_view rhs);
+
     std::string to_string() const;
     void to_string(std::string &) const;
     std::size_t digits() const noexcept;
@@ -242,6 +291,7 @@ struct int2048_view : int2048_base {
     friend int2048 operator * (int2048_view, int2048_view);
 
     friend int2048 &operator += (int2048 &lhs, int2048_view rhs);
+    friend int2048 &operator *= (int2048 &lhs, int2048_view rhs);
 
     friend bool operator == (int2048_view, int2048_view) noexcept;
     friend std::strong_ordering operator <=> (int2048_view, int2048_view) noexcept;
@@ -270,7 +320,8 @@ struct int2048_view : int2048_base {
 
 struct int2048 : int2048_base {
   protected:
-    static_assert(fast_pow(10, Base_Length) == Base, "Wrongly implemented!");
+    static_assert(fast_pow(10 , Base_Length) == Base,   "Wrongly implemented!");
+    static_assert(fast_pow(FFT_Base,FFT_Zip) == Base,   "Wrongly implemented!");
 
     friend class int2048_view;
     friend class uint2048_view;
@@ -291,6 +342,12 @@ struct int2048 : int2048_base {
     using _Base_Type::parse_char;
     using _Base_Type::inc;
     using _Base_Type::dec;
+    using _Base_Type::cpy;
+    using _Base_Type::cmp;
+    using _Base_Type::add;
+    using _Base_Type::sub;
+    using _Base_Type::mul;
+    using _Base_Type::div;
 
     _Container  data; /* Data of the integer.   */
     bool        sign; /* Sign of the integer.   */
@@ -304,7 +361,7 @@ struct int2048 : int2048_base {
   public:
     /* Constructors and assignements. */
 
-    int2048() noexcept(noexcept(_Container())) : data{}, sign{false} {}
+    constexpr int2048() noexcept(noexcept(_Container())) : data{}, sign{false} {}
     ~int2048() = default;
 
     int2048(int2048 &&) = default;

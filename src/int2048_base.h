@@ -10,14 +10,12 @@ namespace dark {
  * @brief Increase the range by 1, and store
  * the result to the given output iterator.
  * @param __ptr Begin of the output iterator.
- * @param __int Range to be incremented.
+ * @param src Range to be incremented.
  * @return Whether there is a carry.
  * @note Ensure that the output iterator has enough space.
  */
-int2048_base::inc_t
-    int2048_base::inc(_Iterator __ptr,uint2048_view __int) noexcept {
-    auto __beg = __int.begin();
-    auto __end = __int.end();
+auto int2048_base::inc(_Iterator __ptr,uint2048_view src) noexcept -> inc_t {
+    auto [__beg,__end] = src;
     while (__beg != __end) {
         const _Word_Type __cur = (*__beg++) + 1;
         if (__builtin_expect(__cur < Base,true)) {
@@ -34,15 +32,13 @@ int2048_base::inc_t
  * @brief Decrease the range by 1, and store
  * the result to the given output iterator.
  * @param __ptr Begin of the output iterator.
- * @param __int Range to be decremented.
+ * @param src Range to be decremented.
  * @return Whether there is be a vacancy.
  * @note Ensure that the output iterator has enough space.
  * If the input range is 0, the behavior is undefined!
  */
-int2048_base::dec_t
-    int2048_base::dec(_Iterator __ptr,uint2048_view __int) noexcept {
-    auto __beg = __int.begin();
-    auto __end = __int.end();
+auto int2048_base::dec(_Iterator __ptr,uint2048_view src) noexcept -> dec_t {
+    auto [__beg,__end] = src;
     while (__beg != __end) {
         const _Word_Type __cur = (*__beg++) - 1;
         if (__builtin_expect(__cur < Base,true))  {
@@ -59,12 +55,11 @@ int2048_base::dec_t
 /**
  * @brief Convert a range to string.
  * @param __buf Buffer to store the result.
- * @param __int Range of the number.
+ * @param src Range of the number.
  * @note The input range cannot be empty!
  */
-char *int2048_base::to_string(char *__buf,uint2048_view __int) noexcept {
-    auto __beg = __int.begin(); /* Low  part. */
-    auto __end = __int.end();   /* High part. */
+char *int2048_base::to_string(char *__buf,uint2048_view src) noexcept {
+    auto [__beg,__end] = src;
 
     using namespace std::__detail;
 
@@ -88,13 +83,13 @@ char *int2048_base::to_string(char *__buf,uint2048_view __int) noexcept {
 /**
  * @brief Copy a range to another.
  * @param __ptr Output range.
+ * @param src Input range.
  * @return End of the output range.
  */
-int2048_base::cpy_t
-    int2048_base::cpy(_Iterator __ptr,uint2048_view __int) noexcept {
-    const std::size_t _Length = __int.size();
-    if (__ptr != __int.begin() && _Length)
-        std::memmove(__ptr,__int.begin(),_Length * sizeof(_Word_Type));
+auto int2048_base::cpy(_Iterator __ptr,uint2048_view src) noexcept -> cpy_t {
+    const std::size_t _Length = src.size();
+    if (__ptr != src.begin() && _Length)
+        std::memmove(__ptr,src.begin(),_Length * sizeof(_Word_Type));
     return __ptr + _Length;
 }
 
@@ -103,19 +98,18 @@ int2048_base::cpy_t
  * @note Two input numbers should be equal in length.
  * None of these numbers is allowed to 0 in length.
  */
-int2048_base::cmp_t
-    int2048_base::cmp(uint2048_view lhs,uint2048_view rhs) noexcept {
+auto int2048_base::cmp(uint2048_view lhs,uint2048_view rhs) noexcept -> cmp_t {
     const auto __end = lhs.begin() - 1;
     auto __lhs = lhs.end();
     auto __rhs = rhs.end();
     do {
         if (*--__lhs != *--__rhs)
-            return {
-                static_cast <std::size_t> (__lhs - __end),
-                *__lhs <=> *__rhs
+            return cmp_t {
+                .length = static_cast <std::size_t> (__lhs - __end),
+                .cmp    = *__lhs <=> *__rhs
             };
     } while (__lhs != __end);
-    return {0, std::strong_ordering::equal};
+    return cmp_t {0, std::strong_ordering::equal};
 }
 
 /**
@@ -124,8 +118,7 @@ int2048_base::cmp_t
  * @return Whether there is a carry.
  * @note lhs should be no shorter than rhs.
  */
-int2048_base::add_t
-    int2048_base::add(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept {
+auto int2048_base::add(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept -> add_t {
     bool __carry = 0;
     auto __lhs = lhs.begin();
     for (const auto __cur : rhs) {
@@ -146,8 +139,7 @@ int2048_base::add_t
  * @return Iterator to the tail of the result.
  * @note lhs should be strictly larger than rhs.
  */
-int2048_base::sub_t
-    int2048_base::sub(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept {
+auto int2048_base::sub(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept -> sub_t {
     bool __carry = 0;
     auto __lhs = lhs.begin();
     for(const auto __cur : rhs) {
@@ -177,34 +169,180 @@ int2048_base::sub_t
  * @param __ptr Output range.
  * @return Iterator to the tail of the result.
  */
-int2048_base::mul_t
-    int2048_base::mul(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept {
-    if (is_brute_mulable(lhs,rhs)) return brute_mul(__ptr,lhs,rhs);
-    /* Core: FFT multiplication. */
+auto int2048_base::mul(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept -> mul_t {
+    // if (is_brute_mulable(lhs,rhs)) return brute_mul(__ptr,lhs,rhs);
 
-    const auto _Max_Length  = lhs.size() + rhs.size(); // It should be no less than 2.
-    const auto _Bit_Length  = 32 - std::countl_zero <std::uint32_t> (_Max_Length - 1);
-    const auto _Length      = std::size_t {1} << _Bit_Length;
+    const auto _Max_Length = lhs.size() + rhs.size();
+    // We use decltype(auto) because we may return a reference.
+    // Whether to use reference as optimization depends on implementation.
+    decltype(auto) __fft = make_fft(lhs , rhs, _Max_Length);
+    decltype(auto) __rev = make_rev(__fft.size());
 
-    auto __fft = make_FFT(lhs,rhs,_Length);
+    swap_rev(__fft.begin(), __rev.begin() , __fft.size());
+    FFT_base::FFT (__fft.begin() , __fft.size());
 
+    for(auto &__val : __fft) __val *= __val;
+
+    swap_rev(__fft.begin(), __rev.begin(), __fft.size());
+    FFT_base::IFFT(__fft.begin() , __fft.size());
+
+    auto __cpx = __fft.begin();
+
+    _Word_Type __carry = 0;
+    for(std::size_t i = 0 ; i != _Max_Length ; ++i) {
+        const _Word_Type __lo = std::llround((__cpx++)->imag());
+        const _Word_Type __hi = std::llround((__cpx++)->imag());
+        __carry += __hi * FFT_Base + __lo;
+        *__ptr++ = __carry % Base;
+        __carry /= Base;
+    }
+
+    while (*(__ptr - 1) == 0) --__ptr; // Remove the leading 0.
+    return __ptr;
 }
 
-int2048_base::FFT_t
-    int2048_base::make_FFT(uint2048_view lhs,uint2048_view rhs,std::size_t __len) noexcept {
-    FFT_t __fft; __fft.reserve(__len);
+namespace int2048_helper {
 
-    if (lhs.size() < rhs.size()) std::swap(lhs,rhs);
+constexpr auto __log2(std::size_t __val) -> std::size_t {
+    return 31 - std::countl_zero <std::uint32_t> (__val);
+}
+
+constexpr auto __fdiv(double __val, std::size_t __shift) -> double {
+    struct { /* Only works in small endian machines! */
+        using ull = std::size_t;
+        static_assert(sizeof(double) == sizeof(ull));
+        static_assert(sizeof(double) == 8);
+        union {
+            double dat;
+            struct { /* A reference. */
+                ull frac : 52;
+                ull exp  : 11;
+                ull sign : 1;
+            };
+            ull raw;
+        };
+    } __tmp = {__val};
+    if (__tmp.raw) __tmp.raw -= __shift << 52;
+    // __tmp.exp -= __shift;
+    return __tmp.dat;
+}
+
+
+} // namespace int2048_helper
+
+
+auto int2048_base::make_fft(
+    uint2048_view lhs,
+    uint2048_view rhs,
+    const std::size_t _Max_Length) -> fft_t {
+    using namespace int2048_helper;
+
+    const auto _Bit_Length  = 2 + __log2(_Max_Length - 1);
+    const auto _Length      = std::size_t {1} << _Bit_Length;
+
+    fft_t __fft; __fft.init_capacity(_Length);
+
+    if (lhs.size() < rhs.size()) std::swap(lhs , rhs);
     auto __lhs = lhs.begin();
 
-    /* Clear rhs and then clear lhs. */
-    for (const auto __cur : rhs) __fft.push_back({*__lhs++,__cur});
-    while(__lhs != lhs.end())    __fft.push_back({*__lhs++,  0  });
+    const auto _LShift = 1 + __log2(lhs.size());
+    const auto _Rshift = _Bit_Length + 1 - _LShift;
 
-    /* Fill the reset with 0. */
-    __fft.resize(__len);
+    /* Visit rhs and then visit lhs. */
+    for (const auto __cur : rhs) {
+        const auto __val = *__lhs++;
+        __fft.emplace_back(
+            __fdiv(__val % FFT_Base , _LShift),
+            __fdiv(__cur % FFT_Base , _Rshift));
+        __fft.emplace_back(
+            __fdiv(__val / FFT_Base , _LShift),
+            __fdiv(__cur / FFT_Base , _Rshift));
+    }
+
+    while(__lhs != lhs.end()) {
+        const auto __val = *__lhs++;
+        __fft.emplace_back(__fdiv(__val % FFT_Base , _LShift));
+        __fft.emplace_back(__fdiv(__val / FFT_Base , _LShift));
+    }
+
+    __fft.fill_size(_Length);
     return __fft;
 }
 
 
+/**
+ * @brief Make the reverse array.
+ * @param __len Length of the array.
+ * @return Reverse array.
+ * @note __len should be no less than 2.
+ */
+auto int2048_base::make_rev(std::size_t __len) -> rev_t {
+    rev_t __rev; __rev.init_capacity(__len);
+    const auto __half = __len >> 1;
+
+    __rev.push_back(0);
+    __rev.push_back(__half);
+
+    for(std::size_t i = 1 ; i < __half; ++i) {
+        const auto __cur = __rev[i] >> 1;
+        __rev.push_back(__cur);
+        __rev.push_back(__cur | __half);
+    }
+
+    return __rev;
+}
+
+
+/**
+ * @brief Swap according to the reverse array.
+ * @param __cpx FFT array to be swapped.
+ * @param __rev Reverse array.
+ * @param __len Length of the FFT array.
+ */
+void int2048_base::swap_rev(complex *__cpx,const idx_t *__rev, std::size_t __len) noexcept {
+    for (std::size_t i = 0; i < __len; ++i)
+        if (i < __rev[i]) // Avoid swap twice.
+            std::swap(__cpx[i], __cpx[__rev[i]]);
+}
+
+
 } // namespace dark
+
+/* Implementation of FFT base */
+namespace dark {
+
+namespace int2048_helper {
+
+template <bool _Is_IFFT>
+inline void __FFT_impl(FFT_base::complex * __cpx, std::size_t __len) noexcept {
+    std::size_t __cnt   = 0; // log2 of i
+    std::size_t   i     = 1; // pow of 2
+
+    do { // wn is the unit root
+        auto wn = FFT_base::root_table()[__cnt++];
+        if constexpr (_Is_IFFT) wn = std::conj(wn);
+
+        for (std::size_t j = 0 ; j != __len ; j += (i << 1)) {
+            auto w = FFT_base::complex {1.0, 0.0};
+            for (std::size_t k = 0 ; k != i ; (void)++k, w *= wn) {
+                auto &__lhs = __cpx[j + k];
+                auto &__rhs = __cpx[j + k + i];
+                auto  __tmp = __rhs * w;
+                __rhs = __lhs - __tmp;
+                __lhs = __lhs + __tmp;
+            }
+        }
+    } while((i <<= 1) != __len);
+}
+
+} // namespace int2048_helper
+
+void FFT_base::FFT(complex * __cpx, std::size_t __len)
+noexcept { return int2048_helper::__FFT_impl <false> (__cpx, __len); }
+
+void FFT_base::IFFT(complex *__cpx, std::size_t __len)
+noexcept { return int2048_helper::__FFT_impl <true> (__cpx, __len); }
+
+
+} // namespace dark
+
