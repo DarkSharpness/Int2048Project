@@ -350,7 +350,7 @@ struct allocator {
 
     [[nodiscard,__gnu__::__always_inline__]]
     constexpr static _Tp *allocate(size_t __n) {
-        if consteval {
+        if (std::__is_constant_evaluated()) {
             return std::allocator <_Tp> {}.allocate(__n);
         } else {
             return static_cast <_Tp *> (::dark::malloc(__n * __N));
@@ -360,7 +360,7 @@ struct allocator {
     [[__gnu__::__always_inline__]]
     constexpr static void deallocate(_Tp *__ptr,[[maybe_unused]] size_t __n)
     noexcept {
-        if consteval {
+        if (std::__is_constant_evaluated()) {
             return std::allocator <_Tp> {}.deallocate(__ptr,__n);
         } else {
             return ::dark::free(__ptr);
