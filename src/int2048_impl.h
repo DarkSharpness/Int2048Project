@@ -146,10 +146,8 @@ int2048 &operator += (int2048 &lhs, int2048_view rhs) {
 
 int2048 &operator += (int2048 &lhs, int2048 &&rhs) {
     /* We use the one with larger buffer. */
-    if (lhs.data.capacity() < rhs.data.capacity())
-        return lhs = std::move(rhs += lhs);
-    else /* lhs capacity is larger now */
-        return lhs += int2048_view{rhs};
+    if (lhs.data.capacity() < rhs.data.capacity()) lhs.swap(rhs);
+    return lhs += int2048_view {rhs};
 }
 
 int2048 int2048::operator ++ (void) && { return std::move(this->operator ++ ()); }
@@ -167,9 +165,43 @@ int2048 operator - (int2048_view lhs, int2048 &&rhs) { return std::move(rhs.nega
 int2048 operator - (int2048 &&lhs, int2048_view rhs) { return std::move(lhs += rhs.negate());  }
 int2048 operator - (int2048 &&lhs, int2048 &&rhs) { return std::move(lhs += std::move(rhs.negate())); }
 
-// int2048 operator * (int2048_view lhs, int2048 &&rhs) { return std::move(rhs *= lhs); }
-// int2048 operator * (int2048 &&lhs, int2048_view rhs) { return std::move(lhs *= rhs); }
-// int2048 operator * (int2048 &&lhs, int2048 &&rhs) { return std::move(lhs *= std::move(rhs)); }
+int2048 operator * (int2048_view lhs, int2048_view rhs) {
+    int2048 __ret {};
+    if (lhs.is_zero() || rhs.is_zero()) return __ret;
+    __ret.sign = lhs.sign ^ rhs.sign;
+    __ret.data.init_capacity(lhs.size() + rhs.size());
+    __ret.data.resize(int2048::mul(__ret.begin(), lhs.to_unsigned(), rhs.to_unsigned()));
+    return __ret;
+}
+
+int2048 &operator *= (int2048 &lhs, int2048_view rhs) {
+    if (lhs.is_zero() || rhs.is_zero()) return lhs.reset();
+    lhs.sign ^= rhs.sign;
+    /**
+     * @brief This may avoid the invalidation of rhs caused by self growing
+     * If lhs == rhs, then if we reallocate for lhs, the rhs will be invalidated.
+     * So, if lhs may not have enough capacity, we just perform normal multiplication.
+     */
+    if (lhs.data.capacity() < lhs.size() + rhs.size()) {
+        auto __temp = std::move(lhs.data);
+        auto __view = uint2048_view {__temp.begin(), __temp.end()};
+        lhs.data.init_capacity(__view.size() + rhs.size());
+        lhs.data.resize(int2048::mul(lhs.begin(), __view, rhs.to_unsigned()));
+    } else { /* Enough capcaity, so use the space of lhs as buffer. */
+        lhs.data.resize(int2048::mul(lhs.begin(), uint2048_view {lhs}, rhs.to_unsigned()));
+    } return lhs;
+}
+
+int2048 &operator *= (int2048 &lhs, int2048 && rhs) {
+    /* We use the one with larger buffer. */
+    if (lhs.data.capacity() < rhs.data.capacity()) lhs.swap(rhs);
+    return lhs *= int2048_view {rhs};
+}
+
+
+int2048 operator * (int2048_view lhs, int2048 &&rhs) { return std::move(rhs *= lhs); }
+int2048 operator * (int2048 &&lhs, int2048_view rhs) { return std::move(lhs *= rhs); }
+int2048 operator * (int2048 &&lhs, int2048 &&rhs) { return std::move(lhs *= std::move(rhs)); }
 
 } // namespace dark
 
@@ -180,15 +212,15 @@ namespace dark {
 
 
 /* Explicitly construct from a view. */
-int2048::int2048(int2048_view __int) : data(__int._beg,__int._end), sign(__int.sign) {}
+int2048::int2048(int2048_view src) : data(src._beg,src._end), sign(src.sign) {}
 /* Explicitly assign from a view. */
-int2048 &int2048::operator = (int2048_view __int) {
-    if (this->begin() == __int.begin()) {
-        this->data.resize(__int.size());
+int2048 &int2048::operator = (int2048_view src) {
+    if (this->begin() == src.begin()) {
+        this->data.resize(src.size());
     } else {
-        this->data.assign(__int._beg,__int._end);
+        this->data.assign(src._beg,src._end);
     }
-    this->sign = __int.sign;
+    this->sign = src.sign;
     return *this;
 }
 
@@ -307,8 +339,8 @@ void int2048::print(std::ostream &__os) const {
 }
 
 /* Read a number from the given input stream. */
-std::istream &operator >> (std::istream &__is, int2048 &__int) {
-    __int.read(__is); return __is;
+std::istream &operator >> (std::istream &__is, int2048 &src) {
+    src.read(__is); return __is;
 }
 
 /**
@@ -321,16 +353,4 @@ std::size_t int2048::digits() const noexcept { return int2048_view {*this}.digit
 } // namespace dark
 
 
-namespace std {
-
-inline void swap(dark::int2048 &__lhs, dark::int2048 &__rhs)
-noexcept { __lhs.swap(__rhs); }
-
-inline dark::int2048_view abs(dark::int2048_view __int)
-noexcept { return __int.set_sign(false); }
-
-inline dark::int2048 abs(dark::int2048 &&__int)
-noexcept { return std::move(__int.set_sign(false)); }
-
-} // namespace std
 
