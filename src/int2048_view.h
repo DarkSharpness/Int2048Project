@@ -5,15 +5,15 @@
 namespace dark {
 
 /* Construct explicitly from a big integer. */
-uint2048_view::uint2048_view(const int2048 &__int)
-noexcept : _beg(__int.data.begin()), _end(__int.data.end()) {}
+uint2048_view::uint2048_view(const int2048 &src)
+noexcept : _beg(src.data.begin()), _end(src.data.end()) {}
 
 /* Not completed... */
-uint2048_view::uint2048_view(const uint2048 &) noexcept { __builtin_unreachable(); }
+uint2048_view::uint2048_view(const uint2048 &) noexcept { std::terminate(); }
 
 /* Construct explicitly from a signed view. */
-uint2048_view::uint2048_view(int2048_view __int)
-noexcept : _beg(__int._beg), _end(__int._end) {}
+uint2048_view::uint2048_view(int2048_view src)
+noexcept : _beg(src.begin()), _end(src.end()) {}
 
 /* Convert explicitly to string. */
 uint2048_view::operator std::string() const { return this->to_string(); }
@@ -67,19 +67,19 @@ std::strong_ordering operator <=> (uint2048_view lhs, uint2048_view rhs) noexcep
 namespace dark {
 
 /* Construct implicitly from a big integer. */
-int2048_view::int2048_view(const int2048 &__int)
-noexcept : _beg(__int.data.begin()), _end(__int.data.end()), sign(__int.sign) {}
+int2048_view::int2048_view(const int2048 &src)
+noexcept : _beg(src.data.begin()), _end(src.data.end()), sign(src.sign) {}
 
 /* Not completed... */
-int2048_view::int2048_view(const uint2048 &) noexcept { __builtin_unreachable(); }
+int2048_view::int2048_view(const uint2048 &) noexcept { std::terminate(); }
 
 /* Construct explicitly from an unsigned view.  */
-int2048_view::int2048_view(uint2048_view __int)
-noexcept : int2048_view(__int,false) {}
+int2048_view::int2048_view(uint2048_view src)
+noexcept : int2048_view(src,false) {}
 
 /* Construct explicitly from an unsigned view and a sign. */
-int2048_view::int2048_view(uint2048_view __int,bool __sign)
-noexcept : _beg(__int._beg), _end(__int._end), sign(__sign) {}
+int2048_view::int2048_view(uint2048_view src,bool __sign)
+noexcept : _beg(src.begin()), _end(src.end()), sign(__sign) {}
 
 /* Perform nothing to the view. */
 int2048_view int2048_view::operator + (void)
@@ -90,10 +90,10 @@ int2048_view int2048_view::operator - (void)
 const noexcept { return int2048_view {*this}.negate(); }
 
 /* Print out the number to the given output stream. */
-std::ostream &operator << (std::ostream &__os, int2048_view __int) {
-    __int.buffer.clear();
-    __int.to_string(__int.buffer);
-    return __os << __int.buffer;
+std::ostream &operator << (std::ostream &__os, int2048_view src) {
+    src.buffer.clear();
+    src.to_string(src.buffer);
+    return __os << src.buffer;
 }
 
 /* Convert explicitly to string. */
@@ -154,9 +154,11 @@ bool operator == (int2048_view lhs, int2048_view rhs) noexcept {
 /* Compare two numbers. */
 std::strong_ordering operator <=> (int2048_view lhs, int2048_view rhs) noexcept {
     if (lhs.sign != rhs.sign) return rhs.sign <=> lhs.sign;
-    return lhs.sign ?
-        rhs.to_unsigned() <=> lhs.to_unsigned() :
-        lhs.to_unsigned() <=> rhs.to_unsigned();
+    if (lhs.sign) {
+        return rhs.to_unsigned() <=> lhs.to_unsigned();
+    } else {
+        return lhs.to_unsigned() <=> rhs.to_unsigned();
+    }
 }
 
 } // namespace dark
