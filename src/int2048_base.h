@@ -3,54 +3,8 @@
 #include "int2048.h"
 #include <bit>
 
-/* Implementation of int2048 base. */
+/* Implementation of arithmetic operators. */
 namespace dark {
-
-/**
- * @brief Increase the range by 1, and store
- * the result to the given output iterator.
- * @param __ptr Begin of the output iterator.
- * @param src Range to be incremented.
- * @return Whether there is a carry.
- * @note Ensure that the output iterator has enough space.
- */
-auto int2048_base::inc(_Iterator __ptr,uint2048_view src) noexcept -> inc_t {
-    auto [__beg,__end] = src;
-    while (__beg != __end) {
-        const _Word_Type __cur = (*__beg++) + 1;
-        if (__builtin_expect(__cur < Base,true)) {
-            *__ptr++ = __cur;
-            return (cpy(__ptr,{__beg,__end}) , false);
-        } else {
-            *__ptr++ = 0;
-        }
-    } return true;
-}
-
-
-/**
- * @brief Decrease the range by 1, and store
- * the result to the given output iterator.
- * @param __ptr Begin of the output iterator.
- * @param src Range to be decremented.
- * @return Whether there is be a vacancy.
- * @note Ensure that the output iterator has enough space.
- * If the input range is 0, the behavior is undefined!
- */
-auto int2048_base::dec(_Iterator __ptr,uint2048_view src) noexcept -> dec_t {
-    auto [__beg,__end] = src;
-    while (__beg != __end) {
-        const _Word_Type __cur = (*__beg++) - 1;
-        if (__builtin_expect(__cur < Base,true))  {
-            *__ptr++ = __cur;
-            return __beg == __end ?
-                (__cur == 0) : (cpy(__ptr,{__beg,__end}) , false);
-        } else {
-            *__ptr++ = Base - 1;
-        }
-    } __builtin_unreachable(); // Iff input range is 0.
-}
-
 
 /**
  * @brief Convert a range to string.
@@ -78,6 +32,50 @@ char *int2048_base::to_string(char *__buf,uint2048_view src) noexcept {
     }
 
     return __buf; // Return the end of the string.
+}
+
+/**
+ * @brief Increase the range by 1, and store
+ * the result to the given output iterator.
+ * @param __ptr Begin of the output iterator.
+ * @param src Range to be incremented.
+ * @return Whether there is a carry.
+ * @note Ensure that the output iterator has enough space.
+ */
+auto int2048_base::inc(_Iterator __ptr,uint2048_view src) noexcept -> inc_t {
+    auto [__beg,__end] = src;
+    while (__beg != __end) {
+        const _Word_Type __cur = (*__beg++) + 1;
+        if (__builtin_expect(__cur < Base,true)) {
+            *__ptr++ = __cur;
+            return (cpy(__ptr,{__beg,__end}) , false);
+        } else {
+            *__ptr++ = 0;
+        }
+    } return true;
+}
+
+/**
+ * @brief Decrease the range by 1, and store
+ * the result to the given output iterator.
+ * @param __ptr Begin of the output iterator.
+ * @param src Range to be decremented.
+ * @return Whether there is be a vacancy.
+ * @note Ensure that the output iterator has enough space.
+ * If the input range is 0, the behavior is undefined!
+ */
+auto int2048_base::dec(_Iterator __ptr,uint2048_view src) noexcept -> dec_t {
+    auto [__beg,__end] = src;
+    while (__beg != __end) {
+        const _Word_Type __cur = (*__beg++) - 1;
+        if (__builtin_expect(__cur < Base,true))  {
+            *__ptr++ = __cur;
+            return __beg == __end ?
+                (__cur == 0) : (cpy(__ptr,{__beg,__end}) , false);
+        } else {
+            *__ptr++ = Base - 1;
+        }
+    } __builtin_unreachable(); // Iff input range is 0.
 }
 
 /**
@@ -118,7 +116,8 @@ auto int2048_base::cmp(uint2048_view lhs,uint2048_view rhs) noexcept -> cmp_t {
  * @return Whether there is a carry.
  * @note lhs should be no shorter than rhs.
  */
-auto int2048_base::add(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept -> add_t {
+auto int2048_base::add(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
+noexcept -> add_t {
     bool __carry = 0;
     auto __lhs = lhs.begin();
     for (const auto __cur : rhs) {
@@ -139,7 +138,8 @@ auto int2048_base::add(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noex
  * @return Iterator to the tail of the result.
  * @note lhs should be strictly larger than rhs.
  */
-auto int2048_base::sub(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept -> sub_t {
+auto int2048_base::sub(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
+noexcept -> sub_t {
     bool __carry = 0;
     auto __lhs = lhs.begin();
     for(const auto __cur : rhs) {
@@ -149,28 +149,29 @@ auto int2048_base::sub(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noex
 
     if (__carry) {
         const auto __dist = lhs.end() - __lhs;    
+        // Example: 1000 - 999 = 0001 = 1
         if (__dist == 1 && *__lhs == 1) {
-            while (*(__ptr - 1) == 0) --__ptr; // Remove the leading 0.
-        } else {
+            while (__ptr[-1] == 0) --__ptr; // Remove the leading 0.
+        } else { // Example 10000 - 999 = 09001 = 9001
             __ptr += __dist - dec(__ptr, {__lhs,lhs.end()});
         } return __ptr;
     } else {
-        if (__lhs != lhs.end()) {
+        if (__lhs != lhs.end()) { // Example 1999 - 999 = 1000
             __ptr = cpy(__ptr, {__lhs,lhs.end()});
-        } else {
-            while (*(__ptr - 1) == 0) --__ptr; // Remove the leading 0.
+        } else { // Example: 2000 - 1999 = 0001 = 1
+            while (__ptr[-1] == 0) --__ptr; // Remove the leading 0.
         } return __ptr;
     }
 }
-
 
 /**
  * @brief Mul lhs and rhs to __ptr.
  * @param __ptr Output range.
  * @return Iterator to the tail of the result.
  */
-auto int2048_base::mul(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noexcept -> mul_t {
-    // if (is_brute_mulable(lhs,rhs)) return brute_mul(__ptr,lhs,rhs);
+auto int2048_base::mul(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
+-> mul_t {
+    if (use_brute_mul(lhs,rhs)) return brute_mul(__ptr,lhs,rhs);
 
     const auto _Max_Length = lhs.size() + rhs.size();
     // We use decltype(auto) because we may return a reference.
@@ -197,9 +198,13 @@ auto int2048_base::mul(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs) noex
         __carry /= Base;
     }
 
-    while (*(__ptr - 1) == 0) --__ptr; // Remove the leading 0.
+    if (__ptr[-1] == 0) --__ptr; // Remove the leading 0.
     return __ptr;
 }
+
+} // namespace dark
+
+namespace dark {
 
 namespace int2048_helper {
 
@@ -230,7 +235,50 @@ constexpr auto __fdiv(double __val, std::size_t __shift) -> double {
 
 } // namespace int2048_helper
 
+/**
+ * @return Whether lhs and rhs should be multiplied by brute force.
+ * @note After this function, lhs will be no smaller than rhs in size.
+ */
+bool int2048_base::use_brute_mul(uint2048_view &lhs, uint2048_view &rhs) 
+noexcept {
+    if (lhs.size() < rhs.size()) std::swap(lhs,rhs);
+    return lhs.size() < Max_Brute_Length;
+}
 
+auto int2048_base::brute_mul(_Iterator __ptr, uint2048_view lhs, uint2048_view rhs)
+noexcept -> mul_t {
+    // First, we clear the memory for the result.
+    // This requires that input ranges should not overlap with output range.
+    std::memset(__ptr, 0, (lhs.size() + rhs.size()) * sizeof(_Word_Type));
+
+    for (const auto __lhs : lhs) {
+        _Iterator __tmp = __ptr;
+        for (const auto __rhs : rhs) *__tmp++ += __lhs * __rhs;
+        /* Operate on those low bits. */
+        const auto __carry = *__ptr / Base;
+        *__ptr %= Base;
+        (void) ++__ptr;
+        *__ptr += __carry;
+    }
+
+    _Word_Type __carry = 0;
+    for ([[maybe_unused]] const auto __ : rhs) {
+        __carry += *__ptr;
+        *__ptr++ = __carry % Base;
+        __carry /= Base;
+    }
+
+    if (__ptr[-1] == 0) --__ptr; // Remove the leading 0.
+    return __ptr;
+}
+
+
+
+/**
+ * @param _Max_Length The maximum length of the array.
+ * @return Return the fft array generated by lhs and rhs.
+ * @note lhs should be no smaller than rhs in size.
+ */
 auto int2048_base::make_fft(
     uint2048_view lhs,
     uint2048_view rhs,
@@ -242,7 +290,6 @@ auto int2048_base::make_fft(
 
     fft_t __fft; __fft.init_capacity(_Length);
 
-    if (lhs.size() < rhs.size()) std::swap(lhs , rhs);
     auto __lhs = lhs.begin();
 
     const auto _LShift = 1 + __log2(lhs.size());

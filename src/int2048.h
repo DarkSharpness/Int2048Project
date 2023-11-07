@@ -97,6 +97,8 @@ struct int2048_base : protected FFT_base {
     /* Maximum indexs a builtin-in word_type may takes. */
     inline static constexpr std::size_t Word_Length =
         std::numeric_limits <_Word_Type>::digits10 / Base_Length + 1;
+    /* Maximum length of brute force multiplication. */
+    inline static constexpr std::size_t Max_Brute_Length = 16;
 
   protected:
 
@@ -151,8 +153,8 @@ struct int2048_base : protected FFT_base {
     static add_t add(_Iterator, uint2048_view, uint2048_view) noexcept;
     static sub_t sub(_Iterator, uint2048_view, uint2048_view) noexcept;
 
-    static mul_t mul(_Iterator, uint2048_view, uint2048_view) noexcept;
-    static div_t div(_Iterator, uint2048_view, uint2048_view) noexcept;
+    static mul_t mul(_Iterator, uint2048_view, uint2048_view);
+    static div_t div(_Iterator, uint2048_view, uint2048_view);
 
   protected:
 
@@ -187,9 +189,11 @@ struct uint2048_view : int2048_base {
     using _Base_Type::_Word_Type;
     using _Base_Type::_Container;
     using _Iterator = typename _Container::const_iterator;
+    using _Base_Type::to_string;
 
     _Iterator _beg;
     _Iterator _end;
+
 
     uint2048_view(_Iterator __beg, _Iterator __end)
     noexcept : _beg(__beg), _end(__end) {}
@@ -244,6 +248,7 @@ struct int2048_view : int2048_base {
     using _Base_Type::_Word_Type;
     using _Base_Type::_Container;
     using _Iterator = typename _Container::const_iterator;
+    using _Base_Type::to_string;
 
     _Iterator _beg;
     _Iterator _end;

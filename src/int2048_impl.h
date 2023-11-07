@@ -8,15 +8,18 @@ namespace dark {
 /* Return whether the number is zero. */
 bool int2048::operator !(void) const noexcept { return this->is_non_zero(); }
 
+
 /* Return view to this number. */
 int2048_view int2048::operator + (void) & noexcept { return  int2048_view(*this); }
 /* Return view to this number with a reversed sign. */
 int2048_view int2048::operator - (void) & noexcept { return -int2048_view(*this); }
 
+
 /* Return this number. */
 int2048 int2048::operator + (void) && noexcept { return std::move(*this); }
 /* Return negative value of this number. */
 int2048 int2048::operator - (void) && noexcept { return std::move(this->negate()); }
+
 
 int2048 int2048::operator ++ (int) & {
     int2048 __ret = *this; this->operator ++ (); return __ret;
@@ -51,6 +54,10 @@ int2048 &int2048::operator -- (void) & {
     }
     return *this;
 }
+
+int2048 int2048::operator ++ (void) && { return std::move(this->operator ++ ()); }
+int2048 int2048::operator -- (void) && { return std::move(this->operator -- ()); }
+
 
 int2048 operator + (int2048_view lhs, int2048_view rhs) {
     if (lhs.is_zero()) return int2048{rhs};
@@ -150,20 +157,18 @@ int2048 &operator += (int2048 &lhs, int2048 &&rhs) {
     return lhs += int2048_view {rhs};
 }
 
-int2048 int2048::operator ++ (void) && { return std::move(this->operator ++ ()); }
-int2048 int2048::operator -- (void) && { return std::move(this->operator -- ()); }
-
 int2048 operator + (int2048_view lhs, int2048 &&rhs) { return std::move(rhs += lhs); }
 int2048 operator + (int2048 &&lhs, int2048_view rhs) { return std::move(lhs += rhs); }
 int2048 operator + (int2048 &&lhs, int2048 &&rhs) { return std::move(lhs += std::move(rhs)); }
 
+
 int2048 &operator -= (int2048 &lhs, int2048_view rhs) { return lhs += rhs.negate(); }
 int2048 &operator -= (int2048 &lhs, int2048 &&rhs) { return lhs += std::move(rhs.negate()); }
-
 int2048 operator - (int2048_view lhs, int2048_view rhs) { return lhs + rhs.negate(); }
 int2048 operator - (int2048_view lhs, int2048 &&rhs) { return std::move(rhs.negate() += lhs); }
 int2048 operator - (int2048 &&lhs, int2048_view rhs) { return std::move(lhs += rhs.negate());  }
 int2048 operator - (int2048 &&lhs, int2048 &&rhs) { return std::move(lhs += std::move(rhs.negate())); }
+
 
 int2048 operator * (int2048_view lhs, int2048_view rhs) {
     int2048 __ret {};
@@ -177,12 +182,23 @@ int2048 operator * (int2048_view lhs, int2048_view rhs) {
 int2048 &operator *= (int2048 &lhs, int2048_view rhs) {
     if (lhs.is_zero() || rhs.is_zero()) return lhs.reset();
     lhs.sign ^= rhs.sign;
+
+    /* A simple test of whether brute force is enabled. */
+    constexpr auto __use_brute_force = [](std::size_t __l, std::size_t __r) {
+        return (__l < int2048_base::Max_Brute_Length) |
+               (__r < int2048_base::Max_Brute_Length);
+    };
+
     /**
      * @brief This may avoid the invalidation of rhs caused by self growing
      * If lhs == rhs, then if we reallocate for lhs, the rhs will be invalidated.
      * So, if lhs may not have enough capacity, we just perform normal multiplication.
+     * 
+     * Also, if we choose to use brute force multiplication, we need to ensure
+     * that the input range will not overlap with the output range.
      */
-    if (lhs.data.capacity() < lhs.size() + rhs.size()) {
+    if (lhs.data.capacity() < lhs.size() + rhs.size()
+     || __use_brute_force(lhs.size(), rhs.size())) {
         auto __temp = std::move(lhs.data);
         auto __view = uint2048_view {__temp.begin(), __temp.end()};
         lhs.data.init_capacity(__view.size() + rhs.size());
@@ -198,10 +214,10 @@ int2048 &operator *= (int2048 &lhs, int2048 && rhs) {
     return lhs *= int2048_view {rhs};
 }
 
-
 int2048 operator * (int2048_view lhs, int2048 &&rhs) { return std::move(rhs *= lhs); }
 int2048 operator * (int2048 &&lhs, int2048_view rhs) { return std::move(lhs *= rhs); }
 int2048 operator * (int2048 &&lhs, int2048 &&rhs) { return std::move(lhs *= std::move(rhs)); }
+
 
 } // namespace dark
 
