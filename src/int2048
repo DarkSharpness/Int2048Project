@@ -3,3 +3,27 @@
 #include "int2048_impl.h"
 #include "int2048_view.h"
 #include "int2048_base.h"
+
+
+namespace std {
+
+inline void swap(dark::int2048 &lhs, dark::int2048 &rhs)
+noexcept { lhs.swap(rhs); }
+
+inline dark::int2048_view abs(dark::int2048_view src)
+noexcept { return src.set_sign(false); }
+
+inline dark::int2048 abs(dark::int2048 &&src)
+noexcept { return std::move(src.set_sign(false)); }
+
+} // namespace std
+
+// Some literals.
+namespace dark::int2048_literals {
+
+int2048 operator "" _i2048(std::uintmax_t src) { return int2048 {src}; }
+int2048 operator "" _i2048(const char *src, std::size_t __len) {
+    return int2048 {std::string_view {src,__len}};
+}
+
+} // namespace dark::int2048_literals
