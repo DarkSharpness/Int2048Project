@@ -53,6 +53,13 @@ struct FFT_base {
         return __table.data();
     }
 
+    using _Word_Type = std::uintmax_t;
+
+    /* FFT zip times. */
+    inline static constexpr std::size_t FFT_Zip     = 2;
+    /* FFT Base Word. */
+    inline static constexpr _Word_Type  FFT_Base    = 1e4;
+
     static void  FFT(complex *, std::size_t) noexcept;
     static void IFFT(complex *, std::size_t) noexcept;
 };
@@ -90,13 +97,6 @@ struct int2048_base : protected FFT_base {
     /* Maximum indexs a builtin-in word_type may takes. */
     inline static constexpr std::size_t Word_Length =
         std::numeric_limits <_Word_Type>::digits10 / Base_Length + 1;
-
-  protected:
-
-    /* FFT zip times. */
-    inline static constexpr std::size_t FFT_Zip     = 2;
-    /* FFT Base Word. */
-    inline static constexpr _Word_Type  FFT_Base    = 1e4;
 
   protected:
 
@@ -156,8 +156,8 @@ struct int2048_base : protected FFT_base {
 
   protected:
 
-    static bool is_brute_mulable(uint2048_view, uint2048_view) noexcept;
-    static bool is_brute_divable(uint2048_view, uint2048_view) noexcept;
+    static bool use_brute_mul(uint2048_view&, uint2048_view&) noexcept;
+    static bool use_brute_div(uint2048_view&, uint2048_view&) noexcept;
 
     static mul_t brute_mul(_Iterator, uint2048_view, uint2048_view) noexcept;
     static div_t brute_div(_Iterator, uint2048_view, uint2048_view) noexcept;
@@ -187,8 +187,6 @@ struct uint2048_view : int2048_base {
     using _Base_Type::_Word_Type;
     using _Base_Type::_Container;
     using _Iterator = typename _Container::const_iterator;
-
-    using _Base_Type::to_string;
 
     _Iterator _beg;
     _Iterator _end;
@@ -246,8 +244,6 @@ struct int2048_view : int2048_base {
     using _Base_Type::_Word_Type;
     using _Base_Type::_Container;
     using _Iterator = typename _Container::const_iterator;
-
-    using _Base_Type::to_string;
 
     _Iterator _beg;
     _Iterator _end;
@@ -330,24 +326,6 @@ struct int2048 : int2048_base {
     using _Base_Type::_Word_Type;
     using _Base_Type::_Container;
     using _Iterator  = typename _Container::iterator;
-    using _CIterator = typename _Container::const_iterator; 
-
-    using _Base_Type::Base;
-    using _Base_Type::Init_Length;
-    using _Base_Type::Base_Length;
-    using _Base_Type::Word_Length;
-
-    using _Base_Type::fast_pow;
-    using _Base_Type::make_char;
-    using _Base_Type::parse_char;
-    using _Base_Type::inc;
-    using _Base_Type::dec;
-    using _Base_Type::cpy;
-    using _Base_Type::cmp;
-    using _Base_Type::add;
-    using _Base_Type::sub;
-    using _Base_Type::mul;
-    using _Base_Type::div;
 
     _Container  data; /* Data of the integer.   */
     bool        sign; /* Sign of the integer.   */
