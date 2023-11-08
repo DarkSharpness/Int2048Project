@@ -26,39 +26,16 @@ struct FFT_base {
 
     using complex       = std::complex <double>;
     using FFT_Table_t   = std::array <complex, FFT_Max>;
-    static const complex *root_table() noexcept {
-        using cpx = std::complex <double>;
-        static constexpr FFT_Table_t __table = { // cos (pi / (1 << i)) , sin(pi / (1 << i))
-            cpx{ -1.0 , 0.0 }, // 0
-            cpx{ 0.0  , 1.0 }, // 1
-            cpx{ 0.7071067811865476 , 0.7071067811865475 }, // 2
-            cpx{ 0.9238795325112867 , 0.3826834323650898 }, // 3
-            cpx{ 0.9807852804032304 , 0.19509032201612825 }, // 4
-            cpx{ 0.9951847266721969 , 0.0980171403295606 }, // 5
-            cpx{ 0.9987954562051724 , 0.049067674327418015 }, // 6
-            cpx{ 0.9996988186962042 , 0.024541228522912288 }, // 7
-            cpx{ 0.9999247018391445 , 0.012271538285719925 }, // 8
-            cpx{ 0.9999811752826011 , 0.006135884649154475 }, // 9
-            cpx{ 0.9999952938095762 , 0.003067956762965976 }, // 10
-            cpx{ 0.9999988234517019 , 0.0015339801862847655 }, // 11
-            cpx{ 0.9999997058628822 , 0.0007669903187427045 }, // 12
-            cpx{ 0.9999999264657179 , 0.00038349518757139556 }, // 13
-            cpx{ 0.9999999816164293 , 0.0001917475973107033 }, // 14
-            cpx{ 0.9999999954041073 , 9.587379909597734e-05 }, // 15
-            cpx{ 0.9999999988510269 , 4.793689960306688e-05 }, // 16
-            cpx{ 0.9999999997127567 , 2.396844980841822e-05 }, // 17
-            cpx{ 0.9999999999281892 , 1.1984224905069705e-05 }, // 18
-            cpx{ 0.9999999999820472 , 5.9921124526424275e-06 }, // 19
-        };
-        return __table.data();
-    }
+    using _Word_Type    = std::uintmax_t;
 
-    using _Word_Type = std::uintmax_t;
+    static const complex *root_table() noexcept;
 
-    /* FFT zip times. */
+    /* FFT Zipping times. */
     inline static constexpr std::size_t FFT_Zip     = 2;
+    /* FFT Base Length. */
+    inline static constexpr std::size_t FFT_BaseLen = 4;
     /* FFT Base Word. */
-    inline static constexpr _Word_Type  FFT_Base    = 1e4;
+    inline static constexpr _Word_Type  FFT_Base    = int2048_helper::__pow(10U, FFT_BaseLen);
 
     static void  FFT(complex *, std::size_t) noexcept;
     static void IFFT(complex *, std::size_t) noexcept;
@@ -87,39 +64,24 @@ struct int2048_base : protected FFT_base {
     using _Container = int2048_helper::vector <_Word_Type>;
 
     /* Base of one word. */
-    inline static constexpr _Word_Type  Base = static_cast <_Word_Type> (1e8);
+    inline static constexpr _Word_Type  Base = int2048_helper::__pow(FFT_Base, FFT_Zip);
     /* Base length in decimal. */
-    inline static constexpr std::size_t Base_Length = 8;
+    inline static constexpr std::size_t Base_Length = FFT_BaseLen * FFT_Zip;
     /* Init the array with the least size. */
     inline static constexpr std::size_t Init_Sizeof = 64;
     /* Init the array with this minimum size. */
     inline static constexpr std::size_t Init_Length = Init_Sizeof / sizeof(_Word_Type);
-    /* Maximum indexs a builtin-in word_type may takes. */
+    /* Maximum indexs a builtin-in Word_Type may takes. */
     inline static constexpr std::size_t Word_Length =
         std::numeric_limits <_Word_Type>::digits10 / Base_Length + 1;
     /* Maximum length of brute force multiplication. */
-    inline static constexpr std::size_t Max_Brute_Length = 16;
+    inline static constexpr std::size_t Max_Brute_Length = 17;
 
   protected:
-
-    /* Constexpr pow function. */
-    static constexpr _Word_Type fast_pow(_Word_Type __x, _Word_Type __y)
-    noexcept {
-        _Word_Type __ret = 1;
-        while(__y) {
-            if (__y & 1) __ret *= __x;
-            __x *= __x; __y >>= 1;
-        } return __ret;
-    }
-
-    /* Map a integer to a char. */
-    static constexpr char make_char(_Word_Type __val) noexcept { return __val | '0'; }
-
-    /* Map a char into a integer. */
-    static constexpr _Word_Type parse_char(char __ch) noexcept { return __ch & 0xf; }
 
   protected:
     using _Iterator = typename _Container::iterator;
+    using _CIterator= typename _Container::const_iterator; 
 
     static char *to_string(char *, uint2048_view) noexcept;
 
@@ -169,8 +131,29 @@ struct int2048_base : protected FFT_base {
 
     static void swap_rev(complex *,const idx_t *, std::size_t) noexcept;
 
+  protected:
+
+    /* Unfold template of parsing a string. */
+    template <std::size_t _Beg = 0>
+    [[nodiscard, __gnu__::__always_inline__]]
+    static _Word_Type parse_fold(const char *__str) noexcept {
+        using namespace int2048_helper;
+        if constexpr (_Beg == Base_Length) { return 0; }
+        else {
+            return parse_fold <_Beg + 1> (__str) +
+                parse_char(__str[-_Beg - 1]) * __pow(10U, _Beg);
+        }
+    }
+    [[nodiscard, __gnu__::__always_inline__]]
+    static _Word_Type parse_string(const char *__str) noexcept { return parse_fold(__str); }
+    [[nodiscard, __gnu__::__always_inline__]]
+    static _Word_Type narrow_down(_CIterator, std::size_t) noexcept;
+    [[nodiscard, __gnu__::__always_inline__]]
+    static _Iterator init_value(_Iterator, _Word_Type) noexcept;
+
   public:
-    // static constexpr std::size_t max_size() noexcept {}
+    /* Return the maximum possible length of the integer in decimal. */
+    static consteval std::size_t max_digits() noexcept { return FFT_BaseLen << (FFT_Max - 1); }
 };
 
 /**
@@ -321,8 +304,13 @@ struct int2048_view : int2048_base {
 
 struct int2048 : int2048_base {
   protected:
-    static_assert(fast_pow(10 , Base_Length) == Base,   "Wrongly implemented!");
-    static_assert(fast_pow(FFT_Base,FFT_Zip) == Base,   "Wrongly implemented!");
+    // using namespace int2048_helper;
+
+    // Some static assertions.
+    static_assert(int2048_helper::__pow(10U, Base_Length) == Base,  "Wrongly implemented!");
+    static_assert(int2048_helper::__pow(FFT_Base,FFT_Zip) == Base,  "Wrongly implemented!");
+    static_assert(Init_Length >= Word_Length                     ,  "Wrongly implemented!");
+    static_assert(Base * Base < -1ULL / (Max_Brute_Length + 1)   ,  "Wrongly implemented!");
 
     friend class int2048_view;
     friend class uint2048_view;
@@ -444,16 +432,19 @@ struct int2048 : int2048_base {
      */
 
     /* Construct from a single word.  */
-    template <typename _Tp>
-    requires std::same_as <_Tp, _Word_Type>
+    template <std::same_as <_Word_Type> _Tp>
     int2048(_Tp __val) : data{} , sign(false) {
-        if (__val == 0) { sign = false; return; }
-        data.init_capacity(std::max(Init_Length, Word_Length));
-        init_fold <1> (__val);
+        if (__val == 0) return;
+        data.init_capacity(Init_Length);
+        data.resize(this->init_value(data.begin(), __val));
     }
 
     /* Construct from a single word with given sign. */
-    int2048(_Word_Type __val, bool __sign) : int2048{__val} { sign = __sign; }
+    explicit int2048(_Word_Type __val, bool __sign) : data{} , sign(__sign) {
+        if (__val == 0) { sign = false; return; }
+        data.init_capacity(Init_Length);
+        data.resize(this->init_value(data.begin(), __val));
+    }
 
     /* Construct from any signed integer. */
     int2048(std::intmax_t __val)
@@ -462,11 +453,13 @@ struct int2048 : int2048_base {
         } {}
 
     /* Assign from a single word. */
-    template <typename _Tp>
-    requires std::same_as <_Tp, _Word_Type>
+    template <std::same_as <_Word_Type> _Tp>
     int2048 &operator = (_Tp __val) {
         this->reset();
-        if (__builtin_expect(__val != 0, true)) init_fold <1> (__val);
+        if (__builtin_expect(__val != 0, true)) {
+            data.reserve(Init_Length);
+            data.resize(init_value(this->data.begin(), __val));
+        }
         return *this;
     }
 
@@ -474,23 +467,23 @@ struct int2048 : int2048_base {
     int2048 &operator = (std::intmax_t __val) {
         data.clear();
         if (__builtin_expect(__val != 0, true)) {
-            init_fold <1> ((sign = __val < 0) ?
-                -static_cast <_Word_Type> (__val) : __val);  
+            if (bool(sign = __val < 0)) __val = -__val;
+            data.reserve(Init_Length);
+            data.resize(init_value(this->data.begin(), __val));
         } else { /* If val == 0 */
-            sign = false;
+            this->sign = false;
         } return *this;
     }
 
-    template <typename _Tp>
-    requires std::is_signed_v <_Tp>
+    template <std::signed_integral _Tp>
     explicit operator _Tp() const noexcept {
-        const _Tp __ret = static_cast <_Tp > (narrow_fold <0> ());
+        const _Tp __ret = static_cast <std::make_unsigned_t <_Tp>> (*this);
         return sign ? -__ret : __ret;
     }
 
     template <typename _Tp>
     requires std::is_unsigned_v <_Tp>
-    explicit operator _Tp() const noexcept { return narrow_fold <0> (); }
+    explicit operator _Tp() const noexcept { return narrow_down(data.begin(),data.size()); }
 
     explicit operator bool() const noexcept { return this->is_non_zero(); }
 
@@ -513,48 +506,6 @@ struct int2048 : int2048_base {
     bool is_positive()      const noexcept { return !is_negative() && !this->is_zero(); }
     [[nodiscard]]
     bool is_non_positive()  const noexcept { return  is_negative() ||  this->is_zero(); }
-
-  protected:
-
-    /* Init from an _Word_Type. */
-    template <std::size_t _Beg>
-    void init_fold(_Word_Type __val) noexcept {
-        static_assert (_Beg <= Word_Length, "Too large!");
-        if constexpr (_Beg == Word_Length) {
-            for (std::size_t __i = 0; __i < _Beg; ++__i) {
-                data.push_back(__val % this->Base);
-                __val /= Base;
-            }
-        } else {
-            if (__val < fast_pow(Base, _Beg)) {
-                /* Compiler should unroll this loop. */
-                for (std::size_t __i = 0; __i < _Beg; ++__i) {
-                    data.push_back(__val % this->Base);
-                    __val /= Base;
-                }
-            } else return init_fold <_Beg + 1> (__val);
-        }
-    }
-
-    /* Narrowing down to a builtin-type. */
-    template <std::size_t _Beg>
-    _Word_Type narrow_fold() const noexcept {
-        if constexpr (_Beg == Word_Length) return 0;
-        else {
-            if (data.size() == _Beg) return 0;
-            return data[_Beg] *fast_pow(Base, _Beg) + narrow_fold <_Beg + 1> ();
-        }
-    }
-
-    /* Parsing string to int. */
-    template <std::size_t _Beg>
-    static _Word_Type parse_fold(const char *__str) noexcept {
-        if constexpr (_Beg == Base_Length) { return 0; }
-        else {
-            return parse_fold <_Beg + 1> (__str) +
-                parse_char(__str[-_Beg - 1]) * fast_pow(10, _Beg);
-        }
-    }
 
 };
 

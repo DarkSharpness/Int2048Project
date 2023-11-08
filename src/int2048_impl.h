@@ -343,8 +343,11 @@ void int2048::parse(std::string_view __view) {
         __end -= Base_Length;
     }
 
-    auto &__cur = this->data.push_back(0);
-    while(__beg != __end) __cur = __cur * 10 + parse_char(*__beg++);
+    /* Import the helper function. */
+    using int2048_helper::parse_char;
+    _Word_Type __tmp = 0;
+    while(__beg != __end) __tmp = __tmp * 10 + parse_char(*__beg++);
+    this->data.push_back(__tmp);
 }
 
 /* Print the number to the given output stream. */

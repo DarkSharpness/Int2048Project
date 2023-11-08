@@ -2,6 +2,7 @@
 
 #include "memory.h"
 #include <cstring>
+#include <concepts>
 
 namespace dark::int2048_helper {
 
@@ -206,5 +207,26 @@ void swap
     (dark::int2048_helper::vector <_Tp> &__lhs,
      dark::int2048_helper::vector <_Tp> &__rhs)
 noexcept { __lhs.swap(__rhs); }
+
+}
+
+namespace dark::int2048_helper {
+
+/* Constexpr pow function. */
+template <std::unsigned_integral _Tp>
+inline constexpr _Tp __pow(_Tp __x, std::size_t __y) {
+    _Tp __ret = (__y & 1) ? __x : _Tp {1};
+    while(__y >>= 1) {
+        __x *= __x;
+        if (__y & 1) __ret *= __x;
+    } return __ret;
+}
+
+/* Map a integer to a char. */
+template <std::integral _Tp>
+inline static constexpr char make_char(_Tp __val) noexcept { return __val | '0'; }
+
+/* Map a char into a integer. */
+inline constexpr int parse_char(char __ch) noexcept { return __ch & 0xf; }
 
 }
