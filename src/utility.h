@@ -229,4 +229,31 @@ inline static constexpr char make_char(_Tp __val) noexcept { return __val | '0';
 /* Map a char into a integer. */
 inline constexpr int parse_char(char __ch) noexcept { return __ch & 0xf; }
 
+
+/* Fast log2 function. */
+inline constexpr auto __log2(std::size_t __val) -> std::size_t {
+    return 31 - std::countl_zero <unsigned> (__val);
+}
+
+/* Fast floating point division by pow of 2. (The result cannot be 0!) */
+inline constexpr auto __fdiv(double __val, std::size_t __shift) -> double {
+    struct { /* Only works in small endian machines! */
+        using ull = std::size_t;
+        static_assert(sizeof(double) == sizeof(ull));
+        static_assert(sizeof(double) == 8);
+        union {
+            double dat;
+            struct { /* A reference. */
+                ull frac : 52;
+                ull exp  : 11;
+                ull sign : 1;
+            };
+            ull raw;
+        };
+    } __tmp = {__val};
+    __tmp.raw -= __shift << 52;
+    return __tmp.dat;
+}
+
+
 }
