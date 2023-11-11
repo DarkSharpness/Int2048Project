@@ -2,6 +2,7 @@
 
 #include "int2048.h"
 #include <bit>
+#include <numbers>
 
 /* Implementation of arithmetic operators. */
 namespace dark {
@@ -120,16 +121,16 @@ auto int2048_base::cmp(uint2048_view lhs,uint2048_view rhs) noexcept -> cmp_t {
 auto int2048_base::add(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
 noexcept -> add_t {
     bool __carry = 0;
-    auto __lhs = lhs.begin();
+    auto [__beg,__end] = lhs;
     for (const auto __cur : rhs) {
-        const _Word_Type __sum = *(__lhs++) + __cur + __carry;
+        const _Word_Type __sum = *(__beg++) + __cur + __carry;
         *__ptr++ = (__carry = __sum > Base - 1) ? __sum - Base : __sum;
     }
 
     if (__carry) {
-        return inc(__ptr, {__lhs,lhs.end()});
+        return inc(__ptr, {__beg,__end});
     } else {
-        return cpy(__ptr, {__lhs,lhs.end()}), false;
+        return cpy(__ptr, {__beg,__end}), false;
     }
 }
 
@@ -142,23 +143,23 @@ noexcept -> add_t {
 auto int2048_base::sub(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
 noexcept -> sub_t {
     bool __carry = 0;
-    auto __lhs = lhs.begin();
+    auto [__beg,__end] = lhs;
     for(const auto __cur : rhs) {
-        const _Word_Type __sum = *(__lhs++) - __cur - __carry;
+        const _Word_Type __sum = *(__beg++) - __cur - __carry;
         *__ptr++ = (__carry = __sum > Base - 1) ? __sum + Base : __sum;
     }
 
     if (__carry) {
-        const auto __dist = lhs.end() - __lhs;    
+        const auto __dist = __end - __beg;    
         // Example: 1000 - 999 = 0001 = 1
-        if (__dist == 1 && *__lhs == 1) {
+        if (__dist == 1 && *__beg == 1) {
             while (__ptr[-1] == 0) --__ptr; // Remove the leading 0.
         } else { // Example 10000 - 999 = 09001 = 9001
-            __ptr += __dist - dec(__ptr, {__lhs,lhs.end()});
+            __ptr += __dist - dec(__ptr, {__beg, __end});
         } return __ptr;
     } else {
-        if (__lhs != lhs.end()) { // Example 1999 - 999 = 1000
-            __ptr = cpy(__ptr, {__lhs,lhs.end()});
+        if (__beg != __end) { // Example 1999 - 999 = 1000
+            __ptr = cpy(__ptr, {__beg, __end});
         } else { // Example: 2000 - 1999 = 0001 = 1
             while (__ptr[-1] == 0) --__ptr; // Remove the leading 0.
         } return __ptr;
@@ -174,68 +175,42 @@ auto int2048_base::mul(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
 -> mul_t {
     if (use_brute_mul(lhs,rhs)) return brute_mul(__ptr,lhs,rhs);
 
-    const auto _Max_Length = lhs.size() + rhs.size();
     // We use decltype(auto) because we may return a reference.
     // Whether to use reference as optimization depends on implementation.
-    decltype(auto) __fft = make_fft(lhs , rhs, _Max_Length);
-    decltype(auto) __rev = make_rev(__fft.size());
+    decltype(auto) __fft = make_FFT(lhs , rhs);
 
-    swap_rev(__fft.begin(), __rev.begin() , __fft.size());
-    FFT_base::FFT (__fft.begin() , __fft.size());
+    FFT_base::FFT (__fft.begin(), __fft.capacity());
+    FFT_base::merge_FFT(__fft.begin(), __fft.terminal());
 
-    for(auto &__val : __fft) __val *= __val;
+    FFT_base::FFT (__fft.begin(), __fft.capacity());
+    FFT_base::final_FFT(__fft.begin(), __fft.terminal());
 
-    swap_rev(__fft.begin(), __rev.begin(), __fft.size());
-    FFT_base::IFFT(__fft.begin() , __fft.size());
+    auto __cpx  = __fft.begin();
+    auto __cur  = _Word_Type {0};
 
-    auto __cpx = __fft.begin();
-
-    _Word_Type __carry = 0;
-    for(std::size_t i = 0 ; i != _Max_Length ; ++i) {
-        const _Word_Type __lo = std::llround((__cpx++)->imag());
-        const _Word_Type __hi = std::llround((__cpx++)->imag());
-        __carry += __hi * FFT_Base + __lo;
-        *__ptr++ = __carry % Base;
-        __carry /= Base;
+    static_assert(FFT_Zip == 2, "Wrongly implemented!");
+    for(std::size_t i = 0 ; i != __fft.size() ; ++i) {
+        const _Word_Type __lo = std::llround(__cpx++->imag());
+        const _Word_Type __hi = std::llround(__cpx++->imag());
+        __cur   += __hi * FFT_Base + __lo;
+        *__ptr++ = __cur % Base;
+        __cur   /= Base;
     }
 
     if (__ptr[-1] == 0) --__ptr; // Remove the leading 0.
     return __ptr;
 }
 
+auto int2048_base::div(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
+-> div_t {
+    if (use_brute_div(lhs,rhs)) return brute_div(__ptr,lhs,rhs);
+
+
+}
+
 } // namespace dark
 
 namespace dark {
-
-namespace int2048_helper {
-
-constexpr auto __log2(std::size_t __val) -> std::size_t {
-    return 31 - std::countl_zero <std::uint32_t> (__val);
-}
-
-constexpr auto __fdiv(double __val, std::size_t __shift) -> double {
-    struct { /* Only works in small endian machines! */
-        using ull = std::size_t;
-        static_assert(sizeof(double) == sizeof(ull));
-        static_assert(sizeof(double) == 8);
-        union {
-            double dat;
-            struct { /* A reference. */
-                ull frac : 52;
-                ull exp  : 11;
-                ull sign : 1;
-            };
-            ull raw;
-        };
-    } __tmp = {__val};
-    if (__tmp.raw) __tmp.raw -= __shift << 52;
-    // __tmp.exp -= __shift;
-    // __tmp.dat /= (1ull << __shift)
-    return __tmp.dat;
-}
-
-
-} // namespace int2048_helper
 
 /**
  * @return Whether lhs and rhs should be multiplied by brute force.
@@ -280,78 +255,34 @@ noexcept -> mul_t {
  * @return Return the fft array generated by lhs and rhs.
  * @note lhs should be no smaller than rhs in size.
  */
-auto int2048_base::make_fft(
-    uint2048_view lhs,
-    uint2048_view rhs,
-    const std::size_t _Max_Length) -> fft_t {
+auto int2048_base::make_FFT(uint2048_view lhs,uint2048_view rhs) -> fft_t {
+    static_assert(FFT_Zip == 2, "Wrongly implemented!");
     using namespace int2048_helper;
 
-    const auto _Bit_Length  = 2 + __log2(_Max_Length - 1);
-    const auto _Length      = std::size_t {1} << _Bit_Length;
+    const auto _Max_Length = lhs.size() + rhs.size();
+    const auto _Bit_Length = 2 + __log2(_Max_Length - 1);
+    const auto _Length     = std::size_t {1} << _Bit_Length;
 
-    fft_t __fft; __fft.init_capacity(_Length);
+    fft_t __fft;
+    __fft.init_capacity(_Length);
+    __fft.resize(_Max_Length);
 
-    auto __lhs = lhs.begin();
+    auto *__ptr = __fft.begin();
+    auto [__beg,__end] = lhs;
 
-    const int _LShift = 1 + __log2(lhs.size());
-    const int _Rshift = _Bit_Length + 1 - _LShift;
-
-    /* Visit rhs and then visit lhs. */
-    for (const auto __cur : rhs) {
-        const auto __val = *__lhs++;
-        __fft.emplace_back(
-            __fdiv(__val % FFT_Base , _LShift),
-            __fdiv(__cur % FFT_Base , _Rshift));
-        __fft.emplace_back(
-            __fdiv(__val / FFT_Base , _LShift),
-            __fdiv(__cur / FFT_Base , _Rshift));
+    for (const auto __rhs : rhs) {
+        const auto __lhs = *__beg++;
+        *__ptr++ = complex(__lhs % FFT_Base, __rhs % FFT_Base);
+        *__ptr++ = complex(__lhs / FFT_Base, __rhs / FFT_Base);
+    }
+    while(__beg != __end) {
+        const auto __val = *__beg++;
+        *__ptr++ = complex(__val % FFT_Base);
+        *__ptr++ = complex(__val / FFT_Base);
     }
 
-    while(__lhs != lhs.end()) {
-        const auto __val = *__lhs++;
-        __fft.emplace_back(__fdiv(__val % FFT_Base , _LShift));
-        __fft.emplace_back(__fdiv(__val / FFT_Base , _LShift));
-    }
-
-    __fft.fill_size(_Length);
+    std::memset((void *)__ptr, 0, (__fft.terminal() - __ptr) * sizeof(complex));
     return __fft;
-}
-
-
-/**
- * @brief Make the reverse array.
- * @param __len Length of the array.
- * @return Reverse array.
- * @note __len should be no less than 2.
- */
-auto int2048_base::make_rev(std::size_t __len) -> rev_t {
-    rev_t __rev; __rev.init_capacity(__len);
-    const auto __half = __len >> 1;
-
-    __rev.push_back(0);
-    __rev.push_back(__half);
-
-    for(std::size_t i = 1 ; i < __half; ++i) {
-        const auto __cur = __rev[i] >> 1;
-        __rev.push_back(__cur);
-        __rev.push_back(__cur | __half);
-    }
-
-    return __rev;
-}
-
-
-/**
- * @brief Swap according to the reverse array.
- * @param __cpx FFT array to be swapped.
- * @param __rev Reverse array.
- * @param __len Length of the FFT array.
- */
-void int2048_base::swap_rev(complex *__cpx,const idx_t *__rev, std::size_t __len)
-noexcept {
-    for (std::size_t i = 0; i < __len; ++i)
-        if (i < __rev[i]) // Avoid swap twice.
-            std::swap(__cpx[i], __cpx[__rev[i]]);
 }
 
 /* Initialize by a given value. */
@@ -371,6 +302,7 @@ noexcept -> _Iterator {
         *__ptr++ = __mid / Base;
     } return __ptr;
 }
+
 /* Narrowing down to a builtin-type. */
 inline auto int2048_base::narrow_down(_CIterator __ptr, std::size_t __len)
 noexcept -> _Word_Type {
@@ -389,23 +321,32 @@ noexcept -> _Word_Type {
 /* Implementation of FFT base */
 namespace dark {
 
-namespace int2048_helper {
+/**
+ * @brief The implementation of FFT.
+ * @param __cpx Input complex array, which will be modified.
+ * @param __len Length of the array.
+ * @note Length of the array should be a power of 2.
+ * In addition, the length should be at least 4.
+ */
+void FFT_base::FFT(complex * __cpx, std::size_t __len) noexcept {
+    /* Swap accoring to bit-reverse  */
+    for (std::size_t i = 1, j = __len >> 1; i != __len ; ++i) {
+        if (i < j) std::swap(__cpx[i],__cpx[j]);
+        std::size_t k = __len; // Magic!
+        do { k >>= 1; } while ((j ^= k) < k);
+    }
 
-template <bool _Is_IFFT>
-inline void __FFT_impl(FFT_base::complex * __cpx, std::size_t __len) noexcept {
-    std::size_t __cnt   = 0; // log2 of i
-    std::size_t   i     = 1; // pow of 2
+    /* Calculate the unit root. */
+    auto [__table,__bits] = make_table(__len);
 
-    do { // wn is the unit root
-        auto wn = FFT_base::root_table()[__cnt++];
-        if constexpr (_Is_IFFT) wn = std::conj(wn);
-
+    std::size_t i = 1;
+    do { /* Core FFT */
+        --__bits;
         for (std::size_t j = 0 ; j != __len ; j += (i << 1)) {
-            auto w = FFT_base::complex {1.0, 0.0};
-            for (std::size_t k = 0 ; k != i ; (void)++k, w *= wn) {
-                auto &__lhs = __cpx[j + k];
-                auto &__rhs = __cpx[j + k + i];
-                auto  __tmp = __rhs * w;
+            for (std::size_t k = 0 ; k != i ; ++k) {
+                auto &__lhs = __cpx[j | k];
+                auto &__rhs = __cpx[j | k | i];
+                auto  __tmp = __rhs * __table[k << __bits];
                 __rhs = __lhs - __tmp;
                 __lhs = __lhs + __tmp;
             }
@@ -413,41 +354,64 @@ inline void __FFT_impl(FFT_base::complex * __cpx, std::size_t __len) noexcept {
     } while((i <<= 1) != __len);
 }
 
-} // namespace int2048_helper
+/**
+ * @brief Make the root table for FFT.
+ * @param __len Length of the root table.
+ * @return Custom information struct.
+ */
+auto FFT_base::make_table(std::size_t __len) -> table_t {
+    using namespace int2048_helper;
+    static vector <complex> __table {};
+    if (__table.size() < __len) {
+        __table.~vector();
+        __table.init_capacity(__len);
+        __table.resize(__len);
+        __table[0] = {1.0, 0.0};
 
-void FFT_base::FFT(complex * __cpx, std::size_t __len)
-noexcept { return int2048_helper::__FFT_impl <false> (__cpx, __len); }
+        auto __beg = __table.begin();
+        auto __end = __table.end();
 
-void FFT_base::IFFT(complex *__cpx, std::size_t __len)
-noexcept { return int2048_helper::__FFT_impl <true> (__cpx, __len); }
+        std::size_t __cnt = 0;
+        const double __delta = 2.0 * std::numbers::pi / __len;
 
+        do { /* Avoid too many function calls. */
+            double __angle = __delta * ++__cnt;
 
-auto FFT_base::root_table() noexcept -> const complex *  {
-    using cpx = std::complex <double>;
-    static constexpr FFT_Table_t __table = { // cos (pi / (1 << i)) , sin(pi / (1 << i))
-        cpx{ -1.0 , 0.0 }, // 0
-        cpx{ 0.0  , 1.0 }, // 1
-        cpx{ 0.7071067811865476 , 0.7071067811865475 }, // 2
-        cpx{ 0.9238795325112867 , 0.3826834323650898 }, // 3
-        cpx{ 0.9807852804032304 , 0.19509032201612825 }, // 4
-        cpx{ 0.9951847266721969 , 0.0980171403295606 }, // 5
-        cpx{ 0.9987954562051724 , 0.049067674327418015 }, // 6
-        cpx{ 0.9996988186962042 , 0.024541228522912288 }, // 7
-        cpx{ 0.9999247018391445 , 0.012271538285719925 }, // 8
-        cpx{ 0.9999811752826011 , 0.006135884649154475 }, // 9
-        cpx{ 0.9999952938095762 , 0.003067956762965976 }, // 10
-        cpx{ 0.9999988234517019 , 0.0015339801862847655 }, // 11
-        cpx{ 0.9999997058628822 , 0.0007669903187427045 }, // 12
-        cpx{ 0.9999999264657179 , 0.00038349518757139556 }, // 13
-        cpx{ 0.9999999816164293 , 0.0001917475973107033 }, // 14
-        cpx{ 0.9999999954041073 , 9.587379909597734e-05 }, // 15
-        cpx{ 0.9999999988510269 , 4.793689960306688e-05 }, // 16
-        cpx{ 0.9999999997127567 , 2.396844980841822e-05 }, // 17
-        cpx{ 0.9999999999281892 , 1.1984224905069705e-05 }, // 18
-        cpx{ 0.9999999999820472 , 5.9921124526424275e-06 }, // 19
-    };
-    return __table.data();
+            const double __cos = std::cos(__angle);
+            const double __sin = std::sin(__angle);
+
+            *++__beg = {__cos, __sin};
+            *--__end = {__cos,-__sin};
+        } while (__beg != __end);
+
+        *__beg = {-1.0 , 0.0}; // cos(pi), sin(pi)
+    }
+
+    return {__table.begin(), __log2(__table.size())};
 }
+
+/**
+ * @brief Merge the result of 2 FFT.
+ * @param __beg Begin of the array.
+ * @param __end End of the array.
+ */
+void FFT_base::merge_FFT(complex *__beg, complex *__end) noexcept {
+    const double __mul = 0.5 / (__end - __beg);
+    while (__beg != __end) {
+        auto &__cur = *__beg++;
+        __cur = (__cur * __cur) * __mul;
+    }
+}
+
+/**
+ * @brief Do the work of IFFT to a given array.
+ * @param __beg Begin of the array.
+ * @param __end End of the array.
+ */
+void FFT_base::final_FFT(complex *__beg, complex *__end) noexcept {
+    while (++__beg != --__end) std::swap(*__beg , *__end);
+}
+
 
 } // namespace dark
 
