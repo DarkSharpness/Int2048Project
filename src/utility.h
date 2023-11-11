@@ -99,13 +99,6 @@ struct vector {
         term = (head = __next) + __n;
     }
 
-    /* Resize as given and fill to size with 0. */
-    void fill_size(std::size_t __n) noexcept {
-        _Tp *const __next = head + __n;
-        std::memset((void *)tail, 0, (__next - tail)  * sizeof(_Tp));
-        tail = __next;
-    }
-
     /* Push back a new element without check. */
     _Tp &push_back(const _Tp &__val) noexcept { return *(tail++) = __val; }
 
@@ -180,14 +173,17 @@ struct vector {
     std::size_t vacancy () const noexcept { return term - tail; }
     bool empty() const noexcept { return head == tail; }
 
-    iterator begin() noexcept { return head; }
-    iterator end()   noexcept { return tail; }
+    iterator begin()    noexcept { return head; }
+    iterator end()      noexcept { return tail; }
+    iterator terminal() noexcept { return term; }
 
-    const_iterator begin() const noexcept { return head; }
-    const_iterator end()   const noexcept { return tail; }
+    const_iterator begin()      const noexcept { return head; }
+    const_iterator end()        const noexcept { return tail; }
+    const_iterator terminal()   const noexcept { return term; }
 
-    const_iterator cbegin() const noexcept { return head; }
-    const_iterator cend()   const noexcept { return tail; }
+    const_iterator cbegin()     const noexcept { return head; }
+    const_iterator cend()       const noexcept { return tail; }
+    const_iterator cterminal()  const noexcept { return term; }
 
     /* Fast testing whether equal. */
     friend bool operator == (const vector &__lhs, const vector &__rhs) noexcept {
