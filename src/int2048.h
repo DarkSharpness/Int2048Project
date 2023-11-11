@@ -21,14 +21,12 @@ struct int2048_base;
 namespace dark {
 
 struct FFT_base {
+  protected:
     /* Maximum bit length of FFT. */
     inline static constexpr std::size_t FFT_Max = 20;
 
     using complex       = std::complex <double>;
-    using FFT_Table_t   = std::array <complex, FFT_Max>;
     using _Word_Type    = std::uintmax_t;
-
-    static const complex *root_table() noexcept;
 
     /* FFT Zipping times. */
     inline static constexpr std::size_t FFT_Zip     = 2;
@@ -37,8 +35,16 @@ struct FFT_base {
     /* FFT Base Word. */
     inline static constexpr _Word_Type  FFT_Base    = int2048_helper::__pow(10U, FFT_BaseLen);
 
-    static void  FFT(complex *, std::size_t) noexcept;
-    static void IFFT(complex *, std::size_t) noexcept;
+    static void FFT(complex *, std::size_t) noexcept;
+    static void merge_FFT(complex *, complex *) noexcept;
+    static void final_FFT(complex *, complex *) noexcept;
+
+    using table_t = struct _FFT_Table {
+        complex *   data; // Unit root table.
+        std::size_t bits; // Log2 of table size.
+    };
+
+    static table_t make_table(std::size_t);
 };
 
 /**
@@ -75,7 +81,7 @@ struct int2048_base : protected FFT_base {
     inline static constexpr std::size_t Word_Length =
         std::numeric_limits <_Word_Type>::digits10 / Base_Length + 1;
     /* Maximum length of brute force multiplication. */
-    inline static constexpr std::size_t Max_Brute_Length = 17;
+    inline static constexpr std::size_t Max_Brute_Length = 256;
 
   protected:
 
@@ -104,17 +110,13 @@ struct int2048_base : protected FFT_base {
     /* The container for FFT operation. */
     using fft_t = int2048_helper::vector <complex>;
     using idx_t = std::uint32_t;
-    using rev_t = int2048_helper::vector <idx_t>;
 
     static inc_t inc(_Iterator, uint2048_view) noexcept;
     static dec_t dec(_Iterator, uint2048_view) noexcept;
-
     static cpy_t cpy(_Iterator, uint2048_view) noexcept;
-
     static cmp_t cmp(uint2048_view,uint2048_view) noexcept;
     static add_t add(_Iterator, uint2048_view, uint2048_view) noexcept;
     static sub_t sub(_Iterator, uint2048_view, uint2048_view) noexcept;
-
     static mul_t mul(_Iterator, uint2048_view, uint2048_view);
     static div_t div(_Iterator, uint2048_view, uint2048_view);
 
@@ -126,10 +128,7 @@ struct int2048_base : protected FFT_base {
     static mul_t brute_mul(_Iterator, uint2048_view, uint2048_view) noexcept;
     static div_t brute_div(_Iterator, uint2048_view, uint2048_view) noexcept;
 
-    static fft_t make_fft(uint2048_view,uint2048_view, const std::size_t);
-    static rev_t make_rev(std::size_t);
-
-    static void swap_rev(complex *,const idx_t *, std::size_t) noexcept;
+    static fft_t make_FFT(uint2048_view,uint2048_view);
 
   protected:
 
