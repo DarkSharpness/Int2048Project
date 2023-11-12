@@ -81,9 +81,9 @@ struct int2048_base : protected FFT_base {
     inline static constexpr std::size_t Word_Length =
         std::numeric_limits <_Word_Type>::digits10 / Base_Length + 1;
     /* Maximum length of brute force multiplication. */
-    inline static constexpr std::size_t Max_Brute_Length = 256;
-
-  protected:
+    inline static constexpr std::size_t Max_Brute_Mul_Length = 256;
+    /* Maximum length of brute force division and mod. */
+    inline static constexpr std::size_t Max_Brute_Div_Length = 20;
 
   protected:
     using _Iterator = typename _Container::iterator;
@@ -102,14 +102,11 @@ struct int2048_base : protected FFT_base {
     using add_t = bool;
     using sub_t = _Iterator;
     using mul_t = _Iterator;
-    using div_t = struct _Div_Type {
-        std::size_t length; /* Length of the quotient.  */
-        _Container  remain; /* Remainders in container. */
-    };
+    using div_t = _Iterator;
+    using mod_t = _Iterator;
 
     /* The container for FFT operation. */
-    using fft_t = int2048_helper::vector <complex>;
-    using idx_t = std::uint32_t;
+    using FFT_t = int2048_helper::vector <complex>;
 
     static inc_t inc(_Iterator, uint2048_view) noexcept;
     static dec_t dec(_Iterator, uint2048_view) noexcept;
@@ -119,16 +116,19 @@ struct int2048_base : protected FFT_base {
     static sub_t sub(_Iterator, uint2048_view, uint2048_view) noexcept;
     static mul_t mul(_Iterator, uint2048_view, uint2048_view);
     static div_t div(_Iterator, uint2048_view, uint2048_view);
+    static mod_t mod(_Iterator, uint2048_view, uint2048_view);
 
   protected:
 
     static bool use_brute_mul(uint2048_view&, uint2048_view&) noexcept;
     static bool use_brute_div(uint2048_view&, uint2048_view&) noexcept;
+    static bool use_brute_mod(uint2048_view&, uint2048_view&) noexcept;
 
     static mul_t brute_mul(_Iterator, uint2048_view, uint2048_view) noexcept;
     static div_t brute_div(_Iterator, uint2048_view, uint2048_view) noexcept;
+    static mod_t brute_mod(_Iterator, uint2048_view, uint2048_view) noexcept;
 
-    static fft_t make_FFT(uint2048_view,uint2048_view);
+    static FFT_t make_FFT(uint2048_view,uint2048_view);
 
   protected:
 
@@ -300,7 +300,6 @@ struct int2048_view : int2048_base {
     bool is_non_positive()  const noexcept { return  is_negative() ||  this->is_zero(); }
 };
 
-
 struct int2048 : int2048_base {
   protected:
     // using namespace int2048_helper;
@@ -309,7 +308,7 @@ struct int2048 : int2048_base {
     static_assert(int2048_helper::__pow(10U, Base_Length) == Base,  "Wrongly implemented!");
     static_assert(int2048_helper::__pow(FFT_Base,FFT_Zip) == Base,  "Wrongly implemented!");
     static_assert(Init_Length >= Word_Length                     ,  "Wrongly implemented!");
-    static_assert(Base * Base < -1ULL / (Max_Brute_Length + 1)   ,  "Wrongly implemented!");
+    static_assert(Base * Base < -1ULL / (Max_Brute_Mul_Length + 1)   ,  "Wrongly implemented!");
 
     friend class int2048_view;
     friend class uint2048_view;
@@ -342,7 +341,6 @@ struct int2048 : int2048_base {
     explicit int2048(int2048_view);
     int2048 &operator = (int2048_view);
 
-    /* Construct from an string. */
     explicit int2048(std::string_view);
     int2048 &operator = (std::string_view);
 

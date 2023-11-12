@@ -73,7 +73,7 @@ int2048 operator + (int2048_view lhs, int2048_view rhs) {
         const auto __carry =
             int2048::add(__ret.begin(), lhs.to_unsigned(), rhs.to_unsigned());
         if (__carry) __ret.data.safe_push(__carry);
-    } else {
+    } else { // lhs.sign != rhs.sign
         auto __cmp = lhs.size() <=> rhs.size();
         if (__cmp != 0) {
             if (__cmp < 0) std::swap(lhs,rhs);
@@ -184,8 +184,8 @@ int2048 &operator *= (int2048 &lhs, int2048_view rhs) {
 
     /* A simple test of whether brute force is enabled. */
     constexpr auto __use_brute_force = [](std::size_t __l, std::size_t __r) {
-        return (__l < int2048_base::Max_Brute_Length) |
-               (__r < int2048_base::Max_Brute_Length);
+        return (__l < int2048_base::Max_Brute_Mul_Length) |
+               (__r < int2048_base::Max_Brute_Mul_Length);
     };
 
     /**

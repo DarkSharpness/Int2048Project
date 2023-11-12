@@ -225,7 +225,6 @@ inline static constexpr char make_char(_Tp __val) noexcept { return __val | '0';
 /* Map a char into a integer. */
 inline constexpr int parse_char(char __ch) noexcept { return __ch & 0xf; }
 
-
 /* Fast log2 function. */
 inline constexpr auto __log2(std::size_t __val) -> std::size_t {
     return 31 - std::countl_zero <unsigned> (__val);
