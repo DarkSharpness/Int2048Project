@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory.h"
+#include <bit>
 #include <cstring>
 #include <concepts>
 
