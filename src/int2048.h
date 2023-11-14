@@ -27,6 +27,13 @@ struct FFT_base {
 
     using complex       = std::complex <double>;
     using _Word_Type    = std::uintmax_t;
+    /* Container for FFT operation. */
+    using FFT_t         = int2048_helper::vector <complex>;
+    /* Table reference for FFT operation. */
+    using table_t       = struct _FFT_Table {
+        complex *   data; // Unit root table.
+        std::size_t bits; // Log2 of table size.
+    };
 
     /* FFT Zipping times. */
     inline static constexpr std::size_t FFT_Zip     = 2;
@@ -36,13 +43,12 @@ struct FFT_base {
     inline static constexpr _Word_Type  FFT_Base    = int2048_helper::__pow(10U, FFT_BaseLen);
 
     static void FFT(complex *, std::size_t) noexcept;
-    static void merge_FFT(complex *, complex *) noexcept;
-    static void final_FFT(complex *, complex *) noexcept;
-
-    using table_t = struct _FFT_Table {
-        complex *   data; // Unit root table.
-        std::size_t bits; // Log2 of table size.
-    };
+    [[__gnu__::__always_inline__]]
+    static inline void merge_FFT(complex *, complex *) noexcept;
+    [[__gnu__::__always_inline__]]
+    static inline void final_FFT(complex *, complex *) noexcept;
+    [[__gnu__::__always_inline__]]
+    static inline void FFT_pass(FFT_t &) noexcept;
 
     static table_t make_table(std::size_t);
 };
@@ -83,7 +89,7 @@ struct int2048_base : protected FFT_base {
     /* Maximum length of brute force multiplication. */
     inline static constexpr std::size_t Max_Brute_Mul_Length = 256;
     /* Maximum length of brute force division and mod. */
-    inline static constexpr std::size_t Max_Brute_Div_Length = 20;
+    inline static constexpr std::size_t Max_Brute_Div_Length = 1;
 
   protected:
     using _Iterator = typename _Container::iterator;
@@ -104,9 +110,7 @@ struct int2048_base : protected FFT_base {
     using mul_t = _Iterator;
     using div_t = _Iterator;
     using mod_t = _Iterator;
-
-    /* The container for FFT operation. */
-    using FFT_t = int2048_helper::vector <complex>;
+    using inv_t = _Iterator;
 
     static inc_t inc(_Iterator, uint2048_view) noexcept;
     static dec_t dec(_Iterator, uint2048_view) noexcept;
@@ -118,17 +122,24 @@ struct int2048_base : protected FFT_base {
     static div_t div(_Iterator, uint2048_view, uint2048_view);
     static mod_t mod(_Iterator, uint2048_view, uint2048_view);
 
+    static inv_t inv(_Iterator, uint2048_view) noexcept;
+
   protected:
 
     static bool use_brute_mul(uint2048_view&, uint2048_view&) noexcept;
     static bool use_brute_div(uint2048_view&, uint2048_view&) noexcept;
-    static bool use_brute_mod(uint2048_view&, uint2048_view&) noexcept;
+    static bool use_brute_mod(uint2048_view&, uint2048_view&);
 
     static mul_t brute_mul(_Iterator, uint2048_view, uint2048_view) noexcept;
-    static div_t brute_div(_Iterator, uint2048_view, uint2048_view) noexcept;
+    static div_t brute_div(_Iterator, uint2048_view, uint2048_view);
     static mod_t brute_mod(_Iterator, uint2048_view, uint2048_view) noexcept;
 
-    static FFT_t make_FFT(uint2048_view,uint2048_view);
+    static FFT_t make_FFT(uint2048_view, uint2048_view);
+
+    static uint2048_view try_div(_Iterator, uint2048_view, uint2048_view) noexcept;
+
+    static div_t adjust_div(_Iterator,_Iterator,uint2048_view,uint2048_view,uint2048_view) noexcept;
+    static mod_t adjust_mod(_Iterator,_Iterator,uint2048_view,uint2048_view,uint2048_view) noexcept;
 
   protected:
 

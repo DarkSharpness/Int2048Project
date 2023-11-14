@@ -1,7 +1,6 @@
 #pragma once
 
 #include "int2048.h"
-#include <bit>
 #include <numbers>
 
 /* Implementation of arithmetic operators. */
@@ -178,12 +177,7 @@ auto int2048_base::mul(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
     // We use decltype(auto) because we may return a reference.
     // Whether to use reference as optimization depends on implementation.
     decltype(auto) __fft = make_FFT(lhs , rhs);
-
-    FFT_base::FFT (__fft.begin(), __fft.capacity());
-    FFT_base::merge_FFT(__fft.begin(), __fft.terminal());
-
-    FFT_base::FFT (__fft.begin(), __fft.capacity());
-    FFT_base::final_FFT(__fft.begin(), __fft.terminal());
+    FFT_pass(__fft);
 
     auto __cpx  = __fft.begin();
     auto __cur  = _Word_Type {0};
@@ -201,8 +195,58 @@ auto int2048_base::mul(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
     return __ptr;
 }
 
+auto int2048_base::div(_Iterator __ptr,uint2048_view lhs,uint2048_view rhs)
+-> div_t {
+    if (lhs.size() < rhs.size())    return __ptr;   // Of course 0.
+    if (use_brute_div(lhs, rhs))    return brute_div(__ptr,lhs,rhs);
+
+    _Container __buf {}; // Buffer. Maybe it should set static.
+    uint2048_view __quotient = [&__buf, lhs, rhs]() {
+        auto __shift = [](uint2048_view __v, std::size_t __n) {
+            return uint2048_view {__v.begin() + __n, __v.end()};
+        };
+        // Now, delta is at least 1.
+        const std::size_t _Delta = lhs.size() - rhs.size();
+        if (_Delta <= rhs.size()) {
+            __buf.init_capacity(lhs.size() + rhs.size() + 2);
+            return __shift(try_div(__buf.begin(), lhs, rhs), rhs.size() * 2);
+        } else {
+            __buf.init_capacity(lhs.size() * 2 - rhs.size() + 2);
+        }
+    } ();
+
+    return adjust_div(__ptr, __buf.begin(), lhs, rhs, __quotient);
+}
+
+/**
+ * @brief Use newton method to give a fast and accurate division.
+ * Error of this estimation is at most 1.
+ * @param __beg Output range. (Custom buffer).
+ * @return Range of the result.
+ */
+auto int2048_base::try_div(_Iterator __beg, uint2048_view lhs, uint2048_view rhs)
+-> uint2048_view {
+    _Iterator __tmp = inv(__beg, rhs);
+    _Iterator __end = mul(__beg, lhs, {__beg, __tmp});
+    return{ __beg,__end };
+}
+
+/**
+ * @brief Work out the inverse of a number.
+ * @param __ptr Output range.
+ * @param __val Input number.
+ * @return Iterator to the tail of the result.
+ */
+auto int2048_base::inv(_Iterator __ptr, uint2048_view __val)
+noexcept -> inv_t {
+    
+}
+
+
+
 } // namespace dark
 
+/* Implementation of mul and div and mod. */
 namespace dark {
 
 /**
@@ -245,7 +289,6 @@ noexcept -> mul_t {
     if (__ptr[-1] == 0) --__ptr; // Remove the leading 0.
     return __ptr;
 }
-
 
 /**
  * @param _Max_Length The maximum length of the array.
@@ -315,6 +358,63 @@ noexcept -> _Word_Type {
             return __ptr[0] + __ptr[1] * __pow(Base,1) + __ptr[2] * __pow(Base,2);
     }
 }
+
+bool int2048_base::use_brute_div(uint2048_view &lhs, uint2048_view &rhs) noexcept {
+    const std::size_t _Delta = lhs.size() - rhs.size();
+    return _Delta == 0 || (_Delta == 1 && *(lhs.end() - 1) < *(rhs.end() - 1));
+}
+
+auto int2048_base::brute_div(_Iterator __ptr, uint2048_view lhs, uint2048_view rhs)
+-> div_t {
+    auto __set_result = [__ptr](_Word_Type __val) -> _Iterator {
+        *__ptr = __val; return __ptr + 1;
+    }; // Simple function to set the result.
+
+    const bool _Delta = lhs.size() - rhs.size();
+    while(*rhs.begin() == 0) ++rhs._beg, ++lhs._beg;
+
+    if (__builtin_expect(_Delta == 0 && lhs.size() == 1, false))
+        return __set_result(*lhs.begin() / *rhs.begin());
+
+    /* Estimate the possible range. */
+    auto [__l , __r] = [=]() -> std::pair <std::size_t,std::size_t> {
+        std::size_t __lhs = *(lhs.end() - 2) + *(lhs.end() - 1) * Base;
+        std::size_t __rhs = *(rhs.end() - 1);
+        if (_Delta == 1) __rhs = __rhs * Base + *(rhs.end() - 2);
+        return { __lhs / (__rhs + 1), __lhs / __rhs + 1};
+    } ();
+
+    /* Now lhs < 2 * rhs, so return 0 or 1. */
+    if (!__l) return __set_result(_Delta || cmp(lhs,rhs).cmp >= 0);
+
+    _Container __buf { lhs.size() }; // Buffer. Maybe it should set static.
+
+    /* Binary search in range [l , r)*/
+    while (__l != __r) {
+        const std::size_t __mid = (__l + __r) >> 1;
+
+        auto __beg = __buf.begin();
+        _Word_Type __carry = 0;
+        for (auto __cur : rhs) {
+            __carry += __cur * __mid;
+            *__beg++ = __carry % Base;
+            __carry /= Base;
+        }
+
+        if (_Delta == 0) {
+            if (__carry)  { __r = __mid;     continue; }
+        } else {
+            if (!__carry) { __l = __mid + 1; continue; }
+            *__beg++ = __carry;
+        }
+
+        auto __cmp = cmp({__buf.begin(),__beg} , lhs).cmp;
+        if (__cmp == 0) return __set_result(__mid);
+        else if (__cmp < 0)     __l = __mid + 1;
+        else                    __r = __mid;
+    } return __set_result(__l - 1);
+}
+
 
 } // namespace dark
 
@@ -395,7 +495,7 @@ auto FFT_base::make_table(std::size_t __len) -> table_t {
  * @param __beg Begin of the array.
  * @param __end End of the array.
  */
-void FFT_base::merge_FFT(complex *__beg, complex *__end) noexcept {
+inline void FFT_base::merge_FFT(complex *__beg, complex *__end) noexcept {
     const double __mul = 0.5 / (__end - __beg);
     while (__beg != __end) {
         auto &__cur = *__beg++;
@@ -408,8 +508,20 @@ void FFT_base::merge_FFT(complex *__beg, complex *__end) noexcept {
  * @param __beg Begin of the array.
  * @param __end End of the array.
  */
-void FFT_base::final_FFT(complex *__beg, complex *__end) noexcept {
+inline void FFT_base::final_FFT(complex *__beg, complex *__end) noexcept {
     while (++__beg != --__end) std::swap(*__beg , *__end);
+}
+
+
+/**
+ * @brief A pass through all things to do in FFT.
+ * @param __fft FFT array generated by make_FFT.
+ */
+inline void FFT_base::FFT_pass(FFT_t &__fft) noexcept {
+    FFT (__fft.begin(), __fft.capacity());
+    merge_FFT(__fft.begin(), __fft.terminal());
+    FFT (__fft.begin(), __fft.capacity());
+    final_FFT(__fft.begin(), __fft.terminal());
 }
 
 
